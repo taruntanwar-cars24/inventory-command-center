@@ -36,7 +36,7 @@ function evaluateQuote(bid, buyingPrice, ageBucket) {
     return { status: "REJECTED", reason: `Loss \u20B9${Math.abs(pnl).toLocaleString("en-IN")} exceeds \u20B97,000 max for 0-30 day bucket` };
   }
   if (bucket.includes("30-60") || bucket.includes("30 - 60") || bucket === "30-60") {
-    if (pnl >= -2500) return { status: "AUTO_APPROVED", reason: `Loss \u20B9${Math.abs(pnl).toLocaleString("en-IN")} is within \u20B92,500 limit for 30-60 day bucket` };
+    if (pnl >= -25000) return { status: "AUTO_APPROVED", reason: `Loss \u20B9${Math.abs(pnl).toLocaleString("en-IN")} is within \u20B92,500 limit for 30-60 day bucket` };
     return { status: "REJECTED", reason: `Loss \u20B9${Math.abs(pnl).toLocaleString("en-IN")} exceeds \u20B92,500 max for 30-60 day bucket` };
   }
   if (bucket.includes("60-90") || bucket.includes("60 - 90") || bucket === "60-90") {
