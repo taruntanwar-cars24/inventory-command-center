@@ -1,1046 +1,726 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import * as XLSX from "xlsx";
 
-/* ═══════════════════════════════════════════════════════════════
-   Cars24 Inventory Command Center
-   ─────────────────────────────────────────────────────────────
-   Data sources:
-     • Stuck Inventory  → Google Sheets (public CSV export)
-     • Liquidation P&L  → Excel upload (.xlsx)
-     • Master Auction   → Excel upload (.xlsx)
-   ═══════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════
+   CARS24 INVENTORY COMMAND CENTER v3
+   ───────────────────────────────────────────────────────────────────────
+   Tab 1 — Stuck Inventory: Google Sheet live mirror with full table
+   Tab 2 — Quote Submission: Sales team submits quotes on App IDs
+   ═══════════════════════════════════════════════════════════════════════ */
 
-// ── Palette & Theme ──────────────────────────────────────────
-const T = {
-  bg: "#0B0F1A",
-  card: "#111827",
-  cardAlt: "#1A2236",
-  border: "#1E293B",
-  accent: "#3B82F6",
-  accentGlow: "rgba(59,130,246,0.25)",
-  green: "#10B981",
-  red: "#EF4444",
-  amber: "#F59E0B",
-  purple: "#8B5CF6",
-  text: "#F1F5F9",
-  textMuted: "#94A3B8",
-  textDim: "#64748B",
-};
+// ── Google Sheets CSV fetcher ────────────────────────────────────────
+function extractSheetId(input) {
+  const m = input.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  if (m) return m[1];
+  if (/^[a-zA-Z0-9_-]{20,}$/.test(input.trim())) return input.trim();
+  return null;
+}
 
-// ── Helpers ──────────────────────────────────────────────────
-const fmt = (n) => {
-  if (n == null || isNaN(n)) return "—";
-  if (Math.abs(n) >= 1e7) return `₹${(n / 1e7).toFixed(2)}Cr`;
-  if (Math.abs(n) >= 1e5) return `₹${(n / 1e5).toFixed(2)}L`;
-  if (Math.abs(n) >= 1e3) return `₹${(n / 1e3).toFixed(1)}K`;
-  return `₹${Number(n).toLocaleString("en-IN")}`;
-};
-const pct = (n) => (n == null || isNaN(n) ? "—" : `${(n * 100).toFixed(1)}%`);
-const num = (v) => {
+async function fetchSheetData(url) {
+  const id = extractSheetId(url);
+  if (!id) throw new Error("Invalid Google Sheet link. Paste the full URL from your browser.");
+  const csvUrl = `https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=0`;
+  const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(csvUrl)}`;
+  const res = await fetch(proxy);
+  if (!res.ok) throw new Error(`Failed to fetch (${res.status}). Ensure sheet is shared as "Anyone with the link → Viewer".`);
+  const text = await res.text();
+  if (text.includes("<!DOCTYPE") || text.includes("<html"))
+    throw new Error('Got HTML instead of data. Make sure the sheet sharing is set to "Anyone with the link".');
+  const wb = XLSX.read(text, { type: "string" });
+  return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "" });
+}
+
+// ── Number helpers ───────────────────────────────────────────────────
+const toNum = (v) => {
   if (v == null || v === "") return null;
-  const n = typeof v === "string" ? Number(v.replace(/[₹,%\s]/g, "")) : Number(v);
+  const n = typeof v === "string" ? Number(v.replace(/[₹,\s%]/g, "")) : Number(v);
   return isNaN(n) ? null : n;
 };
+const INR = (n) => {
+  if (n == null || isNaN(n)) return "—";
+  const a = Math.abs(n);
+  const s = n < 0 ? "-" : "";
+  if (a >= 1e7) return `${s}₹${(a / 1e7).toFixed(2)} Cr`;
+  if (a >= 1e5) return `${s}₹${(a / 1e5).toFixed(2)} L`;
+  if (a >= 1e3) return `${s}₹${(a / 1e3).toFixed(1)} K`;
+  return `${s}₹${a.toLocaleString("en-IN")}`;
+};
 
-// ── Google Sheets URL builder ────────────────────────────────
-function sheetCsvUrl(input) {
-  // Accepts: full URL, share link, or just the sheet ID
-  let id = input.trim();
-  // Extract ID from various URL formats
-  const m = id.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
-  if (m) id = m[1];
-  // Also handle /edit, /pub etc by extracting ID
-  const m2 = id.match(/^([a-zA-Z0-9_-]{20,})$/);
-  if (!m2 && !m) return null;
-  const sheetId = m ? m[1] : id;
-  return `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=0`;
+// ── Key columns for Quote Submission card ────────────────────────────
+const QUOTE_DISPLAY_FIELDS = [
+  { key: "LEAD_ID", label: "Lead / App ID" },
+  { key: "MAKE", label: "Make" },
+  { key: "MODEL", label: "Model" },
+  { key: "Year", label: "Year" },
+  { key: "BUYING_PRICE", label: "Buying Price", format: "inr" },
+  { key: "NEW_MSP", label: "MSP (New)", format: "inr" },
+  { key: "AGE_BUCKET", label: "Age Bucket" },
+  { key: "SALE_CANCEL_DATE", label: "Cancel Date" },
+  { key: "PARKING_REGION", label: "Parking Region" },
+  { key: "C24", label: "C24 Quote" },
+  { key: "Anchor", label: "Anchor", format: "inr" },
+  { key: "TP", label: "Target Price", format: "inr" },
+  { key: "REGION", label: "Region" },
+  { key: "SI_AGE", label: "SI Age" },
+  { key: "C2D Flag", label: "C2D Flag" },
+  { key: "C2D Price", label: "C2D Price", format: "inr" },
+  { key: "Reg No", label: "Reg No" },
+  { key: "fuel_type", label: "Fuel Type" },
+  { key: "Odometer", label: "Odometer" },
+];
+
+// ── Priority columns for Stuck Inventory table ──────────────────────
+const SI_PRIORITY_COLS = [
+  "LEAD_ID", "REGION", "MAKE", "MODEL", "BUYING_PRICE", "NEW_MSP", "Anchor",
+  "TP", "AGE_BUCKET", "SI_AGE", "PARKING_REGION", "SALE_CANCEL_DATE",
+  "C24", "C2D Flag", "C2D Price", "Owner", "Auction Stop", "RI Pending",
+  "Year", "Odometer", "fuel_type", "AUCTION", "BID_AMOUNT",
+  "AUCTION_BIDDING_STATUS",
+];
+
+// ═════════════════════════════════════════════════════════════════════
+//  MAIN APP
+// ═════════════════════════════════════════════════════════════════════
+export default function App() {
+  const [tab, setTab] = useState("inventory");
+  const [sheetUrl, setSheetUrl] = useState("");
+  const [rows, setRows] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [connected, setConnected] = useState(false);
+
+  const connectSheet = async () => {
+    if (!sheetUrl.trim()) return;
+    setLoading(true);
+    setError("");
+    try {
+      const data = await fetchSheetData(sheetUrl);
+      if (!data.length) throw new Error("Sheet is empty or headers couldn't be parsed.");
+      setRows(data);
+      setConnected(true);
+    } catch (e) {
+      setError(e.message);
+    }
+    setLoading(false);
+  };
+
+  const refresh = () => { if (connected) connectSheet(); };
+
+  return (
+    <div style={styles.app}>
+      <style>{globalCSS}</style>
+
+      {/* ── HEADER ─────────────────────────────────────────── */}
+      <header style={styles.header}>
+        <div style={styles.headerLeft}>
+          <div style={styles.logoMark}>C24</div>
+          <div>
+            <div style={styles.logoText}>Inventory Command Center</div>
+            <div style={styles.logoSub}>
+              {rows ? `${rows.length.toLocaleString()} stuck` : "Not connected"}
+            </div>
+          </div>
+        </div>
+
+        <nav style={styles.tabs}>
+          {[
+            { id: "inventory", icon: "📋", label: "Stuck Inventory" },
+            { id: "quotes", icon: "💰", label: "Quote Submission" },
+          ].map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              style={tab === t.id ? styles.tabActive : styles.tab}
+            >
+              <span style={{ marginRight: 6 }}>{t.icon}</span>
+              {t.label}
+            </button>
+          ))}
+        </nav>
+
+        {connected && (
+          <button onClick={refresh} style={styles.refreshBtn} title="Refresh from Google Sheet">
+            🔄 Refresh
+          </button>
+        )}
+      </header>
+
+      {/* ── CONNECT BAR (when not connected) ───────────────── */}
+      {!connected && (
+        <div style={styles.connectBar}>
+          <div style={styles.connectInner}>
+            <div style={styles.connectIcon}>📊</div>
+            <div style={{ flex: 1 }}>
+              <div style={styles.connectTitle}>Connect Stuck Inventory Google Sheet</div>
+              <div style={styles.connectDesc}>
+                Share your sheet as <strong>"Anyone with the link → Viewer"</strong>, then paste the link below.
+              </div>
+              <div style={styles.connectRow}>
+                <input
+                  style={styles.connectInput}
+                  placeholder="https://docs.google.com/spreadsheets/d/your-sheet-id/edit"
+                  value={sheetUrl}
+                  onChange={(e) => setSheetUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && connectSheet()}
+                />
+                <button
+                  style={styles.connectBtn}
+                  onClick={connectSheet}
+                  disabled={loading}
+                >
+                  {loading ? "Connecting..." : "Connect Sheet →"}
+                </button>
+              </div>
+              {error && <div style={styles.connectError}>⚠ {error}</div>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CONTENT ─────────────────────────────────────────── */}
+      <main style={styles.main}>
+        {!rows && connected === false && (
+          <div style={styles.empty}>
+            <div style={{ fontSize: 56, marginBottom: 16, opacity: 0.4 }}>📊</div>
+            <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 8 }}>No Data Connected</div>
+            <div style={{ color: "#8896AB" }}>Paste your Google Sheet link above to get started</div>
+          </div>
+        )}
+        {rows && tab === "inventory" && <InventoryTab rows={rows} />}
+        {rows && tab === "quotes" && <QuoteTab rows={rows} />}
+      </main>
+    </div>
+  );
 }
 
-// ── Parse CSV text → array of objects ────────────────────────
-function parseCsv(text) {
-  const wb = XLSX.read(text, { type: "string" });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  return XLSX.utils.sheet_to_json(ws, { defval: "" });
+// ═════════════════════════════════════════════════════════════════════
+//  TAB 1 — STUCK INVENTORY (full table mirror)
+// ═════════════════════════════════════════════════════════════════════
+function InventoryTab({ rows }) {
+  const [search, setSearch] = useState("");
+  const [regionF, setRegionF] = useState("ALL");
+  const [ageF, setAgeF] = useState("ALL");
+  const [c2dF, setC2dF] = useState("ALL");
+  const [parkF, setParkF] = useState("ALL");
+  const [page, setPage] = useState(0);
+  const [showAllCols, setShowAllCols] = useState(false);
+  const PAGE = 100;
+
+  const allCols = useMemo(() => (rows.length ? Object.keys(rows[0]) : []), [rows]);
+  const displayCols = useMemo(() => {
+    if (showAllCols) return allCols;
+    return SI_PRIORITY_COLS.filter((c) => allCols.includes(c));
+  }, [allCols, showAllCols]);
+
+  const regions = useMemo(() => ["ALL", ...new Set(rows.map((r) => r.REGION).filter(Boolean))].sort(), [rows]);
+  const ages = useMemo(() => ["ALL", ...new Set(rows.map((r) => r.AGE_BUCKET).filter(Boolean))], [rows]);
+  const parks = useMemo(() => ["ALL", ...new Set(rows.map((r) => r.PARKING_REGION).filter(Boolean))].sort(), [rows]);
+
+  const filtered = useMemo(() => {
+    let f = rows;
+    if (regionF !== "ALL") f = f.filter((r) => r.REGION === regionF);
+    if (ageF !== "ALL") f = f.filter((r) => r.AGE_BUCKET === ageF);
+    if (parkF !== "ALL") f = f.filter((r) => r.PARKING_REGION === parkF);
+    if (c2dF !== "ALL") f = f.filter((r) => String(r["C2D Flag"]) === c2dF);
+    if (search) {
+      const s = search.toLowerCase();
+      f = f.filter((r) =>
+        String(r.LEAD_ID || "").toLowerCase().includes(s) ||
+        String(r.MAKE || "").toLowerCase().includes(s) ||
+        String(r.MODEL || "").toLowerCase().includes(s) ||
+        String(r["Reg No"] || "").toLowerCase().includes(s)
+      );
+    }
+    return f;
+  }, [rows, regionF, ageF, parkF, c2dF, search]);
+
+  const paged = filtered.slice(page * PAGE, (page + 1) * PAGE);
+  const totalPages = Math.ceil(filtered.length / PAGE);
+
+  const stats = useMemo(() => {
+    const n = filtered.length;
+    const bp = filtered.reduce((s, r) => s + (toNum(r.BUYING_PRICE) || 0), 0);
+    const ri = filtered.filter((r) => String(r["RI Pending"]).toLowerCase() === "yes" || String(r["RI Pending"]) === "1").length;
+    const auctStop = filtered.filter((r) => String(r["Auction Stop"]).toLowerCase() === "yes" || String(r["Auction Stop"]) === "1").length;
+    const c2d = filtered.filter((r) => String(r["C2D Flag"]) === "1" || String(r["C2D Flag"]).toLowerCase() === "yes").length;
+    const regs = new Set(filtered.map((r) => r.REGION).filter(Boolean)).size;
+    return { n, bp, ri, auctStop, c2d, regs, avgBp: n ? bp / n : 0 };
+  }, [filtered]);
+
+  // Currency columns for right-align + INR formatting
+  const inrCols = new Set(["BUYING_PRICE", "NEW_MSP", "Anchor", "TP", "BID_AMOUNT", "C2D Price", "HAB_AMOUNT", "LVB_BID_AMOUNT", "HBTP", "MSP1", "MSP2", "MSP3", "NEW_MSP_old"]);
+
+  return (
+    <div>
+      {/* ── Metrics Row ──────────────────────────────── */}
+      <div style={styles.metricsRow}>
+        {[
+          { label: "TOTAL CARS", val: stats.n.toLocaleString(), color: "#4F8EF7" },
+          { label: "REGIONS", val: stats.regs, color: "#A78BFA" },
+          { label: "AVG BUYING PRICE", val: INR(stats.avgBp), color: "#F59E0B" },
+          { label: "C2D FLAGGED", val: stats.c2d.toLocaleString(), color: "#10B981" },
+          { label: "RI PENDING", val: stats.ri.toLocaleString(), color: "#EF4444" },
+          { label: "AUCTION STOP", val: stats.auctStop.toLocaleString(), color: "#F97316" },
+        ].map((m) => (
+          <div key={m.label} style={styles.metricCard}>
+            <div style={{ ...styles.metricVal, color: m.color }}>{m.val}</div>
+            <div style={styles.metricLabel}>{m.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Filters ──────────────────────────────────── */}
+      <div style={styles.filterBar}>
+        <input
+          style={styles.searchInput}
+          placeholder="🔍  Search Lead ID, Make, Model, Reg No..."
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+        />
+        <select style={styles.filterSelect} value={regionF} onChange={(e) => { setRegionF(e.target.value); setPage(0); }}>
+          {regions.map((r) => <option key={r} value={r}>{r === "ALL" ? "📍 All Regions" : r}</option>)}
+        </select>
+        <select style={styles.filterSelect} value={ageF} onChange={(e) => { setAgeF(e.target.value); setPage(0); }}>
+          {ages.map((a) => <option key={a} value={a}>{a === "ALL" ? "📅 All Age Buckets" : a}</option>)}
+        </select>
+        <select style={styles.filterSelect} value={parkF} onChange={(e) => { setParkF(e.target.value); setPage(0); }}>
+          {parks.map((p) => <option key={p} value={p}>{p === "ALL" ? "🅿️ All Parking" : p}</option>)}
+        </select>
+        <select style={styles.filterSelect} value={c2dF} onChange={(e) => { setC2dF(e.target.value); setPage(0); }}>
+          <option value="ALL">🏷️ C2D: All</option>
+          <option value="1">C2D: Yes</option>
+          <option value="0">C2D: No</option>
+        </select>
+        <button
+          style={styles.colToggle}
+          onClick={() => setShowAllCols(!showAllCols)}
+        >
+          {showAllCols ? `📊 Key Cols (${SI_PRIORITY_COLS.length})` : `📋 All Cols (${allCols.length})`}
+        </button>
+        <div style={styles.filterCount}>
+          {filtered.length.toLocaleString()} of {rows.length.toLocaleString()}
+        </div>
+      </div>
+
+      {/* ── Data Table ───────────────────────────────── */}
+      <div style={styles.tableWrap}>
+        <div style={styles.tableScroll}>
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={{ ...styles.th, position: "sticky", left: 0, zIndex: 3, background: "#131B2E" }}>#</th>
+                {displayCols.map((c) => (
+                  <th key={c} style={styles.th}>{c}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {paged.map((row, i) => (
+                <tr key={i} className="trow">
+                  <td style={{ ...styles.td, position: "sticky", left: 0, zIndex: 1, background: "#0D1321", color: "#64748B", fontSize: 11 }}>
+                    {page * PAGE + i + 1}
+                  </td>
+                  {displayCols.map((c) => {
+                    const v = row[c];
+                    const isInr = inrCols.has(c);
+                    return (
+                      <td key={c} style={{ ...styles.td, ...(isInr ? { textAlign: "right", fontVariantNumeric: "tabular-nums" } : {}) }}>
+                        {c === "LEAD_ID" ? <span style={{ color: "#4F8EF7", fontWeight: 600 }}>{v}</span>
+                          : c === "C2D Flag" ? <span style={{ ...styles.badge, background: String(v) === "1" ? "#10B98122" : "#64748B22", color: String(v) === "1" ? "#10B981" : "#64748B" }}>{String(v) === "1" ? "Yes" : v || "—"}</span>
+                          : c === "RI Pending" ? <span style={{ color: String(v).toLowerCase() === "yes" || v === "1" ? "#EF4444" : "#94A3B8" }}>{v || "—"}</span>
+                          : c === "Auction Stop" ? <span style={{ color: String(v).toLowerCase() === "yes" || v === "1" ? "#F97316" : "#94A3B8" }}>{v || "—"}</span>
+                          : isInr ? (INR(toNum(v)))
+                          : (String(v || "—"))}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        <div style={styles.pagination}>
+          <button style={styles.pageBtn} onClick={() => setPage(0)} disabled={page === 0}>⟨⟨</button>
+          <button style={styles.pageBtn} onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0}>← Prev</button>
+          <span style={styles.pageInfo}>
+            Page <strong>{page + 1}</strong> of <strong>{totalPages || 1}</strong>
+            <span style={{ margin: "0 8px", color: "#475569" }}>|</span>
+            Showing {page * PAGE + 1}–{Math.min((page + 1) * PAGE, filtered.length)} of {filtered.length.toLocaleString()}
+          </span>
+          <button style={styles.pageBtn} onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1}>Next →</button>
+          <button style={styles.pageBtn} onClick={() => setPage(totalPages - 1)} disabled={page >= totalPages - 1}>⟩⟩</button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-// ── Styles ───────────────────────────────────────────────────
-const S = {
+// ═════════════════════════════════════════════════════════════════════
+//  TAB 2 — QUOTE SUBMISSION
+// ═════════════════════════════════════════════════════════════════════
+function QuoteTab({ rows }) {
+  const [appId, setAppId] = useState("");
+  const [car, setCar] = useState(null);
+  const [notFound, setNotFound] = useState(false);
+  const [quote, setQuote] = useState({ dealer: "", amount: "", notes: "" });
+  const [result, setResult] = useState(null);
+  const [history, setHistory] = useState([]);
+
+  const lookup = () => {
+    const id = appId.trim();
+    if (!id) return;
+    const found = rows.find(
+      (r) => String(r.LEAD_ID || "").trim() === id || String(r.CAR_ID || "").trim() === id
+    );
+    if (found) { setCar(found); setNotFound(false); setResult(null); }
+    else { setCar(null); setNotFound(true); }
+  };
+
+  const submit = () => {
+    if (!car || !quote.amount) return;
+    const bid = toNum(quote.amount);
+    const msp = toNum(car.NEW_MSP) || toNum(car.Anchor) || 0;
+    const buy = toNum(car.BUYING_PRICE) || 0;
+    const pnl = bid - buy;
+
+    let status;
+    if (msp && bid >= msp) status = "APPROVED";
+    else if (msp && bid >= msp * 0.90) status = "ESCALATED";
+    else status = "REJECTED";
+
+    const entry = {
+      id: Date.now(),
+      appId: car.LEAD_ID,
+      make: car.MAKE,
+      model: car.MODEL,
+      dealer: quote.dealer,
+      bid, msp, buy, pnl, status,
+      time: new Date().toLocaleString("en-IN"),
+    };
+    setResult(entry);
+    setHistory((h) => [entry, ...h]);
+    setQuote({ dealer: "", amount: "", notes: "" });
+  };
+
+  const statusColor = { APPROVED: "#10B981", ESCALATED: "#F59E0B", REJECTED: "#EF4444" };
+  const statusIcon = { APPROVED: "✅", ESCALATED: "⚠️", REJECTED: "❌" };
+
+  return (
+    <div className="quote-layout" style={styles.quoteLayout}>
+      {/* ── LEFT: Lookup + Car Card + Submit ─────────── */}
+      <div style={styles.quoteLeft}>
+        {/* Search */}
+        <div style={styles.card}>
+          <div style={styles.cardHead}>🔍 Find Car</div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <input
+              style={{ ...styles.input, flex: 1 }}
+              placeholder="Enter App ID / Lead ID..."
+              value={appId}
+              onChange={(e) => setAppId(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && lookup()}
+            />
+            <button style={styles.primaryBtn} onClick={lookup}>Search</button>
+          </div>
+          {notFound && (
+            <div style={{ color: "#EF4444", fontSize: 13, marginTop: 10 }}>
+              ⚠ No car found with ID "{appId}". Check the Lead ID and try again.
+            </div>
+          )}
+        </div>
+
+        {/* Car detail card */}
+        {car && (
+          <div style={styles.card}>
+            <div style={styles.carHeader}>
+              <div>
+                <div style={styles.carTitle}>{car.MAKE} {car.MODEL}</div>
+                <div style={styles.carSub}>
+                  {car.Year} • {car.fuel_type || "—"} • {car["Reg No"] || car.Registration_No || "—"}
+                </div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 11, color: "#8896AB", textTransform: "uppercase" }}>Lead ID</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: "#4F8EF7", fontVariantNumeric: "tabular-nums" }}>{car.LEAD_ID}</div>
+              </div>
+            </div>
+
+            <div style={styles.detailGrid}>
+              {QUOTE_DISPLAY_FIELDS.filter((f) => f.key !== "LEAD_ID" && f.key !== "MAKE" && f.key !== "MODEL").map((f) => {
+                const raw = car[f.key];
+                const val = f.format === "inr" ? INR(toNum(raw)) : (String(raw || "—"));
+                const isHighlight = ["BUYING_PRICE", "NEW_MSP", "C24"].includes(f.key);
+                return (
+                  <div key={f.key} style={styles.detailItem}>
+                    <div style={styles.detailLabel}>{f.label}</div>
+                    <div style={{
+                      ...styles.detailVal,
+                      ...(isHighlight ? { color: f.key === "BUYING_PRICE" ? "#F59E0B" : f.key === "NEW_MSP" ? "#10B981" : "#4F8EF7", fontWeight: 700 } : {}),
+                    }}>{val}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Quote form */}
+        {car && (
+          <div style={styles.card}>
+            <div style={styles.cardHead}>💰 Submit Dealer Quote</div>
+            <div style={styles.formGrid}>
+              <div>
+                <label style={styles.formLabel}>Dealer Name</label>
+                <input style={styles.input} placeholder="Enter dealer name" value={quote.dealer} onChange={(e) => setQuote({ ...quote, dealer: e.target.value })} />
+              </div>
+              <div>
+                <label style={styles.formLabel}>Bid Amount (₹)</label>
+                <input style={styles.input} placeholder="e.g. 450000" value={quote.amount} onChange={(e) => setQuote({ ...quote, amount: e.target.value })} />
+              </div>
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <label style={styles.formLabel}>Notes (optional)</label>
+              <textarea style={{ ...styles.input, minHeight: 56, resize: "vertical" }} placeholder="Any additional details..." value={quote.notes} onChange={(e) => setQuote({ ...quote, notes: e.target.value })} />
+            </div>
+            <button style={{ ...styles.primaryBtn, width: "100%", marginTop: 16, padding: "14px 0", fontSize: 15 }} onClick={submit}>
+              Submit Quote →
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ── RIGHT: Result + History ──────────────────── */}
+      <div style={styles.quoteRight}>
+        {/* Latest result */}
+        {result && (
+          <div style={{
+            ...styles.card,
+            background: `${statusColor[result.status]}08`,
+            border: `2px solid ${statusColor[result.status]}55`,
+            textAlign: "center",
+          }}>
+            <div style={{ fontSize: 52, marginBottom: 4 }}>{statusIcon[result.status]}</div>
+            <div style={{ fontSize: 26, fontWeight: 900, color: statusColor[result.status], letterSpacing: "2px" }}>
+              {result.status}
+            </div>
+            <div style={{ marginTop: 12, display: "flex", justifyContent: "center", gap: 24, color: "#94A3B8", fontSize: 13 }}>
+              <div>Bid: <strong style={{ color: "#F1F5F9" }}>{INR(result.bid)}</strong></div>
+              <div>MSP: <strong style={{ color: "#F1F5F9" }}>{INR(result.msp)}</strong></div>
+              <div>P&L: <strong style={{ color: result.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(result.pnl)}</strong></div>
+            </div>
+            <div style={{ color: "#64748B", fontSize: 12, marginTop: 8 }}>
+              {result.make} {result.model} — {result.dealer} — {result.time}
+            </div>
+          </div>
+        )}
+
+        {/* Quote history */}
+        <div style={styles.card}>
+          <div style={styles.cardHead}>📋 Quote History ({history.length})</div>
+          {!history.length ? (
+            <div style={{ textAlign: "center", padding: "40px 0", color: "#64748B" }}>
+              No quotes submitted yet. Search for a car and submit a quote.
+            </div>
+          ) : (
+            <div style={{ maxHeight: 500, overflowY: "auto" }}>
+              {history.map((h) => (
+                <div key={h.id} style={styles.historyRow}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>
+                      {h.make} {h.model}
+                      <span style={{ color: "#64748B", fontWeight: 400, marginLeft: 8, fontSize: 12 }}>#{h.appId}</span>
+                    </div>
+                    <div style={{ color: "#8896AB", fontSize: 12, marginTop: 2 }}>
+                      {h.dealer} • {h.time}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <span style={{
+                      ...styles.badge,
+                      background: `${statusColor[h.status]}22`,
+                      color: statusColor[h.status],
+                      border: `1px solid ${statusColor[h.status]}44`,
+                    }}>{h.status}</span>
+                    <div style={{ fontSize: 12, color: "#94A3B8", marginTop: 4 }}>
+                      Bid: {INR(h.bid)} | P&L: <span style={{ color: h.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(h.pnl)}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════
+//  STYLES
+// ═════════════════════════════════════════════════════════════════════
+const styles = {
   app: {
-    background: T.bg,
-    color: T.text,
+    background: "#080C18",
+    color: "#E2E8F0",
     minHeight: "100vh",
-    fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif",
+    fontFamily: "'DM Sans', 'Segoe UI', system-ui, sans-serif",
     fontSize: 14,
   },
   header: {
-    background: "linear-gradient(135deg, #0F172A 0%, #1E293B 100%)",
-    borderBottom: `1px solid ${T.border}`,
-    padding: "16px 24px",
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
+    padding: "0 28px",
+    height: 64,
+    background: "linear-gradient(180deg, #0D1321 0%, #0B0F1A 100%)",
+    borderBottom: "1px solid #1A2236",
     position: "sticky",
     top: 0,
     zIndex: 50,
   },
-  logo: {
-    fontSize: 20,
-    fontWeight: 700,
-    letterSpacing: "-0.5px",
-    background: "linear-gradient(135deg, #3B82F6, #8B5CF6)",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
+  headerLeft: { display: "flex", alignItems: "center", gap: 14 },
+  logoMark: {
+    width: 38, height: 38, borderRadius: 10,
+    background: "linear-gradient(135deg, #F59E0B, #EF4444)",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    fontWeight: 900, fontSize: 14, color: "#fff", letterSpacing: "-0.5px",
   },
-  nav: { display: "flex", gap: 4 },
-  navBtn: (active) => ({
-    padding: "8px 16px",
-    borderRadius: 8,
-    border: "none",
-    cursor: "pointer",
-    fontWeight: 600,
-    fontSize: 13,
-    transition: "all 0.2s",
-    background: active ? T.accent : "transparent",
-    color: active ? "#fff" : T.textMuted,
-  }),
-  main: { padding: "24px", maxWidth: 1400, margin: "0 auto" },
-  card: {
-    background: T.card,
-    border: `1px solid ${T.border}`,
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 16,
+  logoText: { fontSize: 17, fontWeight: 800, color: "#F1F5F9", letterSpacing: "-0.3px" },
+  logoSub: { fontSize: 12, color: "#64748B", marginTop: 1 },
+  tabs: { display: "flex", gap: 4 },
+  tab: {
+    padding: "8px 20px", borderRadius: 8, border: "none", cursor: "pointer",
+    fontWeight: 600, fontSize: 13, color: "#8896AB", background: "transparent",
+    transition: "all 0.2s", fontFamily: "inherit",
   },
-  cardTitle: { fontSize: 16, fontWeight: 700, marginBottom: 12, color: T.text },
-  btn: (variant = "primary") => ({
-    padding: "10px 20px",
-    borderRadius: 8,
-    border: "none",
-    cursor: "pointer",
-    fontWeight: 600,
-    fontSize: 13,
-    transition: "all 0.2s",
-    background: variant === "primary" ? T.accent : T.cardAlt,
-    color: "#fff",
-  }),
-  input: {
-    padding: "10px 14px",
-    borderRadius: 8,
-    border: `1px solid ${T.border}`,
-    background: T.cardAlt,
-    color: T.text,
-    fontSize: 14,
-    outline: "none",
-    width: "100%",
-    boxSizing: "border-box",
+  tabActive: {
+    padding: "8px 20px", borderRadius: 8, border: "none", cursor: "pointer",
+    fontWeight: 700, fontSize: 13, color: "#fff", background: "#1E293B",
+    boxShadow: "0 0 0 1px #334155", fontFamily: "inherit",
   },
-  select: {
-    padding: "10px 14px",
-    borderRadius: 8,
-    border: `1px solid ${T.border}`,
-    background: T.cardAlt,
-    color: T.text,
-    fontSize: 13,
-    outline: "none",
+  refreshBtn: {
+    padding: "7px 14px", borderRadius: 8, border: "1px solid #1E293B",
+    background: "#0D1321", color: "#94A3B8", cursor: "pointer", fontSize: 13,
+    fontFamily: "inherit", fontWeight: 600,
   },
-  badge: (color) => ({
-    display: "inline-block",
-    padding: "3px 10px",
-    borderRadius: 20,
-    fontSize: 12,
-    fontWeight: 600,
-    background: `${color}22`,
-    color: color,
-    border: `1px solid ${color}44`,
-  }),
-  table: {
-    width: "100%",
-    borderCollapse: "separate",
-    borderSpacing: 0,
-    fontSize: 13,
+  connectBar: { background: "#0D1321", borderBottom: "1px solid #1A2236", padding: "20px 28px" },
+  connectInner: { display: "flex", gap: 20, alignItems: "flex-start", maxWidth: 900 },
+  connectIcon: { fontSize: 36, marginTop: 4 },
+  connectTitle: { fontSize: 17, fontWeight: 800, marginBottom: 4 },
+  connectDesc: { fontSize: 13, color: "#8896AB", marginBottom: 12 },
+  connectRow: { display: "flex", gap: 10 },
+  connectInput: {
+    flex: 1, padding: "11px 16px", borderRadius: 8, border: "1px solid #1E293B",
+    background: "#131B2E", color: "#E2E8F0", fontSize: 14, outline: "none",
+    fontFamily: "inherit", minWidth: 300,
   },
+  connectBtn: {
+    padding: "11px 24px", borderRadius: 8, border: "none", background: "#4F8EF7",
+    color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer",
+    fontFamily: "inherit", whiteSpace: "nowrap",
+  },
+  connectError: { color: "#EF4444", fontSize: 13, marginTop: 8 },
+  main: { padding: "20px 28px" },
+  empty: { textAlign: "center", padding: "80px 0" },
+  metricsRow: { display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10, marginBottom: 16 },
+  metricCard: {
+    background: "#0D1321", border: "1px solid #1A2236", borderRadius: 10,
+    padding: "16px 14px", textAlign: "center",
+  },
+  metricVal: { fontSize: 22, fontWeight: 900, letterSpacing: "-1px", fontVariantNumeric: "tabular-nums" },
+  metricLabel: { fontSize: 10, color: "#64748B", marginTop: 4, textTransform: "uppercase", letterSpacing: "1px", fontWeight: 600 },
+  filterBar: { display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" },
+  searchInput: {
+    padding: "9px 14px", borderRadius: 8, border: "1px solid #1E293B",
+    background: "#131B2E", color: "#E2E8F0", fontSize: 13, outline: "none",
+    width: 280, fontFamily: "inherit",
+  },
+  filterSelect: {
+    padding: "9px 12px", borderRadius: 8, border: "1px solid #1E293B",
+    background: "#131B2E", color: "#C8D1E0", fontSize: 13, outline: "none",
+    fontFamily: "inherit", cursor: "pointer",
+  },
+  colToggle: {
+    padding: "8px 14px", borderRadius: 8, border: "1px solid #334155",
+    background: "#1A2236", color: "#94A3B8", fontSize: 12, cursor: "pointer",
+    fontWeight: 600, fontFamily: "inherit",
+  },
+  filterCount: { marginLeft: "auto", color: "#64748B", fontSize: 13, fontVariantNumeric: "tabular-nums" },
+  tableWrap: { background: "#0D1321", border: "1px solid #1A2236", borderRadius: 12, overflow: "hidden" },
+  tableScroll: { overflowX: "auto", maxHeight: "calc(100vh - 340px)", overflowY: "auto" },
+  table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
   th: {
-    padding: "10px 12px",
-    textAlign: "left",
-    fontWeight: 600,
-    color: T.textMuted,
-    borderBottom: `1px solid ${T.border}`,
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: "0.5px",
-    position: "sticky",
-    top: 0,
-    background: T.card,
+    padding: "10px 14px", textAlign: "left", fontWeight: 700, color: "#8896AB",
+    borderBottom: "1px solid #1A2236", fontSize: 11, textTransform: "uppercase",
+    letterSpacing: "0.5px", whiteSpace: "nowrap", position: "sticky", top: 0,
+    background: "#131B2E", zIndex: 2,
   },
   td: {
-    padding: "10px 12px",
-    borderBottom: `1px solid ${T.border}08`,
-    color: T.text,
+    padding: "9px 14px", borderBottom: "1px solid #1A223610",
+    whiteSpace: "nowrap", color: "#C8D1E0", fontSize: 13,
   },
-  metric: {
-    textAlign: "center",
-    padding: "16px 12px",
-    background: T.cardAlt,
-    borderRadius: 10,
-    border: `1px solid ${T.border}`,
-    minWidth: 140,
+  badge: {
+    display: "inline-block", padding: "2px 10px", borderRadius: 20,
+    fontSize: 11, fontWeight: 700,
   },
-  metricVal: (color) => ({
-    fontSize: 24,
-    fontWeight: 800,
-    color: color || T.text,
-    letterSpacing: "-1px",
-  }),
-  metricLabel: {
-    fontSize: 11,
-    color: T.textMuted,
-    marginTop: 4,
-    textTransform: "uppercase",
-    letterSpacing: "0.5px",
+  pagination: {
+    display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+    padding: "12px 16px", borderTop: "1px solid #1A2236",
   },
-  dropzone: (dragging) => ({
-    border: `2px dashed ${dragging ? T.accent : T.border}`,
-    borderRadius: 12,
-    padding: "40px 20px",
-    textAlign: "center",
-    cursor: "pointer",
-    transition: "all 0.3s",
-    background: dragging ? T.accentGlow : "transparent",
-  }),
+  pageBtn: {
+    padding: "6px 14px", borderRadius: 6, border: "1px solid #1E293B",
+    background: "#131B2E", color: "#94A3B8", fontSize: 13, cursor: "pointer",
+    fontWeight: 600, fontFamily: "inherit",
+  },
+  pageInfo: { color: "#64748B", fontSize: 13, margin: "0 8px" },
+  quoteLayout: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "start" },
+  quoteLeft: { display: "flex", flexDirection: "column", gap: 16 },
+  quoteRight: { display: "flex", flexDirection: "column", gap: 16 },
+  card: { background: "#0D1321", border: "1px solid #1A2236", borderRadius: 12, padding: 20 },
+  cardHead: { fontSize: 16, fontWeight: 800, marginBottom: 14, color: "#F1F5F9" },
+  carHeader: {
+    display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+    marginBottom: 16, paddingBottom: 14, borderBottom: "1px solid #1A2236",
+  },
+  carTitle: { fontSize: 22, fontWeight: 900, color: "#F1F5F9", letterSpacing: "-0.5px" },
+  carSub: { fontSize: 13, color: "#64748B", marginTop: 4 },
+  detailGrid: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px 16px" },
+  detailItem: {},
+  detailLabel: { fontSize: 10, color: "#64748B", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600, marginBottom: 2 },
+  detailVal: { fontSize: 14, color: "#C8D1E0", fontVariantNumeric: "tabular-nums" },
+  formGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
+  formLabel: { fontSize: 11, color: "#8896AB", textTransform: "uppercase", letterSpacing: "0.5px", fontWeight: 600, marginBottom: 4, display: "block" },
+  input: {
+    padding: "11px 14px", borderRadius: 8, border: "1px solid #1E293B",
+    background: "#131B2E", color: "#E2E8F0", fontSize: 14, outline: "none",
+    width: "100%", boxSizing: "border-box", fontFamily: "inherit",
+  },
+  primaryBtn: {
+    padding: "11px 24px", borderRadius: 8, border: "none", background: "#4F8EF7",
+    color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit",
+  },
+  historyRow: {
+    display: "flex", justifyContent: "space-between", alignItems: "center",
+    padding: "12px 0", borderBottom: "1px solid #1A223620",
+  },
 };
 
-// ═════════════════════════════════════════════════════════════
-//  DATA SETUP MODULE
-// ═════════════════════════════════════════════════════════════
-function DataSetup({ data, setData }) {
-  const [sheetUrl, setSheetUrl] = useState("");
-  const [sheetStatus, setSheetStatus] = useState(null); // null | 'loading' | 'success' | 'error'
-  const [sheetError, setSheetError] = useState("");
-  const [dragging, setDragging] = useState({});
-
-  // ── Google Sheets fetch ────────────────────────────────
-  const fetchSheet = async () => {
-    if (!sheetUrl.trim()) return;
-    setSheetStatus("loading");
-    setSheetError("");
-    try {
-      const csvUrl = sheetCsvUrl(sheetUrl);
-      if (!csvUrl) throw new Error("Could not parse Google Sheets URL. Paste the full sharing link or sheet ID.");
-
-      // Use allOrigins proxy for CORS
-      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(csvUrl)}`;
-      const res = await fetch(proxyUrl);
-      if (!res.ok) throw new Error(`Fetch failed (${res.status}). Make sure the sheet is shared as "Anyone with the link".`);
-      const text = await res.text();
-      if (text.includes("<!DOCTYPE html>") || text.includes("<html")) {
-        throw new Error("Got an HTML page instead of CSV. Make sure the Google Sheet is publicly shared (Anyone with the link → Viewer).");
-      }
-      const rows = parseCsv(text);
-      if (!rows.length) throw new Error("Sheet appears empty or could not be parsed.");
-      setData((d) => ({ ...d, stuckInventory: rows }));
-      setSheetStatus("success");
-    } catch (e) {
-      setSheetStatus("error");
-      setSheetError(e.message);
-    }
-  };
-
-  // ── Refresh stuck inventory from sheet ────────────────
-  const refreshSheet = async () => {
-    if (sheetUrl.trim()) {
-      await fetchSheet();
-    }
-  };
-
-  // ── Excel file handler ─────────────────────────────────
-  const handleFile = (file, key) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const wb = XLSX.read(e.target.result, { type: "array" });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
-        setData((d) => ({ ...d, [key]: rows }));
-      } catch (err) {
-        alert(`Error reading file: ${err.message}`);
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  };
-
-  const onDrop = (e, key) => {
-    e.preventDefault();
-    setDragging((d) => ({ ...d, [key]: false }));
-    const file = e.dataTransfer?.files?.[0] || e.target?.files?.[0];
-    if (file) handleFile(file, key);
-  };
-
-  const DropZone = ({ label, dataKey, count }) => (
-    <div
-      style={S.dropzone(dragging[dataKey])}
-      onDragOver={(e) => { e.preventDefault(); setDragging((d) => ({ ...d, [dataKey]: true })); }}
-      onDragLeave={() => setDragging((d) => ({ ...d, [dataKey]: false }))}
-      onDrop={(e) => onDrop(e, dataKey)}
-      onClick={() => {
-        const input = document.createElement("input");
-        input.type = "file";
-        input.accept = ".xlsx,.xls,.csv";
-        input.onchange = (e) => onDrop(e, dataKey);
-        input.click();
-      }}
-    >
-      {count ? (
-        <div>
-          <div style={{ fontSize: 28, marginBottom: 8 }}>✅</div>
-          <div style={{ fontWeight: 700, color: T.green }}>{label}</div>
-          <div style={{ color: T.textMuted, fontSize: 13, marginTop: 4 }}>{count.toLocaleString()} rows loaded</div>
-          <div style={{ color: T.textDim, fontSize: 12, marginTop: 8 }}>Drop new file to replace</div>
-        </div>
-      ) : (
-        <div>
-          <div style={{ fontSize: 28, marginBottom: 8 }}>📂</div>
-          <div style={{ fontWeight: 600 }}>{label}</div>
-          <div style={{ color: T.textMuted, fontSize: 13, marginTop: 4 }}>Drag & drop .xlsx or click to browse</div>
-        </div>
-      )}
-    </div>
-  );
-
-  return (
-    <div>
-      <div style={{ ...S.card, background: "linear-gradient(135deg, #0F172A 0%, #1A2236 100%)" }}>
-        <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 8, background: "linear-gradient(135deg, #3B82F6, #8B5CF6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-            Connect Your Data
-          </h2>
-          <p style={{ color: T.textMuted, fontSize: 14 }}>
-            Stuck Inventory via Google Sheets (live sync) • P&L and Auction via Excel upload
-          </p>
-        </div>
-
-        {/* ── Google Sheets Connection ───────────────── */}
-        <div style={{ ...S.card, background: T.cardAlt, marginBottom: 20 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-            <span style={{ fontSize: 20 }}>📊</span>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 15 }}>Stuck Inventory — Google Sheets</div>
-              <div style={{ color: T.textMuted, fontSize: 12, marginTop: 2 }}>Paste your Google Sheets link below. Sheet must be shared as "Anyone with the link → Viewer".</div>
-            </div>
-          </div>
-
-          <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
-            <input
-              style={{ ...S.input, flex: 1 }}
-              placeholder="https://docs.google.com/spreadsheets/d/your-sheet-id/edit"
-              value={sheetUrl}
-              onChange={(e) => setSheetUrl(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && fetchSheet()}
-            />
-            <button style={S.btn("primary")} onClick={fetchSheet} disabled={sheetStatus === "loading"}>
-              {sheetStatus === "loading" ? "⏳ Fetching..." : "🔗 Connect"}
-            </button>
-            {data.stuckInventory && (
-              <button style={S.btn("secondary")} onClick={refreshSheet} title="Refresh data from sheet">
-                🔄
-              </button>
-            )}
-          </div>
-
-          {sheetStatus === "success" && (
-            <div style={{ ...S.badge(T.green), marginTop: 4 }}>
-              ✓ Connected — {data.stuckInventory.length.toLocaleString()} rows loaded
-            </div>
-          )}
-          {sheetStatus === "error" && (
-            <div style={{ color: T.red, fontSize: 13, marginTop: 4 }}>⚠ {sheetError}</div>
-          )}
-
-          {/* Instructions */}
-          <details style={{ marginTop: 14 }}>
-            <summary style={{ cursor: "pointer", color: T.accent, fontSize: 13, fontWeight: 600 }}>
-              📋 How to share your Google Sheet
-            </summary>
-            <div style={{ padding: "12px 0", color: T.textMuted, fontSize: 13, lineHeight: 1.8 }}>
-              <strong style={{ color: T.text }}>Step 1:</strong> Open your Stuck Inventory Google Sheet<br />
-              <strong style={{ color: T.text }}>Step 2:</strong> Click <strong style={{ color: T.text }}>Share</strong> (top right)<br />
-              <strong style={{ color: T.text }}>Step 3:</strong> Under "General access", change to <strong style={{ color: T.accent }}>"Anyone with the link"</strong><br />
-              <strong style={{ color: T.text }}>Step 4:</strong> Set role to <strong style={{ color: T.text }}>Viewer</strong> (default)<br />
-              <strong style={{ color: T.text }}>Step 5:</strong> Copy the link and paste it above<br />
-              <br />
-              <span style={{ color: T.amber }}>⚠ Important:</span> The first row must be column headers (LEAD_ID, REGION, MAKE, MODEL, etc.)
-            </div>
-          </details>
-        </div>
-
-        {/* ── Excel Uploads ─────────────────────────── */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <DropZone label="Liquidation P&L" dataKey="liquidationPnl" count={data.liquidationPnl?.length} />
-          <DropZone label="Master Auction" dataKey="masterAuction" count={data.masterAuction?.length} />
-        </div>
-      </div>
-
-      {/* Status summary */}
-      <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
-        {[
-          { label: "Stuck Inventory", key: "stuckInventory", icon: "📊" },
-          { label: "Liquidation P&L", key: "liquidationPnl", icon: "💰" },
-          { label: "Master Auction", key: "masterAuction", icon: "🔨" },
-        ].map(({ label, key, icon }) => (
-          <div key={key} style={{ ...S.card, flex: 1, textAlign: "center", padding: 12, background: data[key] ? `${T.green}11` : T.cardAlt, borderColor: data[key] ? `${T.green}44` : T.border }}>
-            <div style={{ fontSize: 18 }}>{icon}</div>
-            <div style={{ fontSize: 12, fontWeight: 600, marginTop: 4, color: data[key] ? T.green : T.textDim }}>
-              {label}
-            </div>
-            <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
-              {data[key] ? `${data[key].length.toLocaleString()} rows` : "Not loaded"}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ═════════════════════════════════════════════════════════════
-//  LIQUIDATION DASHBOARD
-// ═════════════════════════════════════════════════════════════
-function LiquidationDashboard({ data }) {
-  const pnl = data.liquidationPnl || [];
-  const si = data.stuckInventory || [];
-  const [regionFilter, setRegionFilter] = useState("ALL");
-  const [ownerFilter, setOwnerFilter] = useState("ALL");
-  const [ageFilter, setAgeFilter] = useState("ALL");
-
-  const regions = useMemo(() => ["ALL", ...new Set(pnl.map((r) => r.INSP_REGION || r.Insp_Region || r.Region || "").filter(Boolean))], [pnl]);
-  const owners = useMemo(() => ["ALL", ...new Set(pnl.map((r) => r.Owner || r.OWNER || "").filter(Boolean))], [pnl]);
-  const ageBuckets = useMemo(() => ["ALL", ...new Set(pnl.map((r) => r.AGE_BUCKET || r.Age_Bucket || "").filter(Boolean))], [pnl]);
-
-  const filtered = useMemo(() => {
-    let rows = pnl;
-    if (regionFilter !== "ALL") rows = rows.filter((r) => (r.INSP_REGION || r.Insp_Region || r.Region) === regionFilter);
-    if (ownerFilter !== "ALL") rows = rows.filter((r) => (r.Owner || r.OWNER) === ownerFilter);
-    if (ageFilter !== "ALL") rows = rows.filter((r) => (r.AGE_BUCKET || r.Age_Bucket) === ageFilter);
-    return rows;
-  }, [pnl, regionFilter, ownerFilter, ageFilter]);
-
-  const metrics = useMemo(() => {
-    if (!filtered.length) return null;
-    const totalPnl = filtered.reduce((s, r) => s + (num(r["P&L"] || r.PNL || r.pnl) || 0), 0);
-    const totalLoss = filtered.reduce((s, r) => s + (num(r.Loss || r.LOSS) || 0), 0);
-    const totalSell = filtered.reduce((s, r) => s + (num(r.SELL_PRICE || r.Sell_Price) || 0), 0);
-    const totalBuy = filtered.reduce((s, r) => s + (num(r.BOUGHT_BID_AMOUNT || r.Buying_Price) || 0), 0);
-    const cars = filtered.length;
-    return {
-      totalPnl, totalLoss, totalSell, totalBuy, cars,
-      avgLoss: cars ? totalLoss / cars : 0,
-      avgSell: cars ? totalSell / cars : 0,
-      margin: totalSell ? totalPnl / totalSell : 0,
-    };
-  }, [filtered]);
-
-  // Region breakdown
-  const regionBreakdown = useMemo(() => {
-    const map = {};
-    filtered.forEach((r) => {
-      const reg = r.INSP_REGION || r.Insp_Region || r.Region || "Unknown";
-      if (!map[reg]) map[reg] = { cars: 0, loss: 0, pnl: 0 };
-      map[reg].cars++;
-      map[reg].loss += num(r.Loss || r.LOSS) || 0;
-      map[reg].pnl += num(r["P&L"] || r.PNL) || 0;
-    });
-    return Object.entries(map).map(([region, v]) => ({ region, ...v, avgLoss: v.cars ? v.loss / v.cars : 0 })).sort((a, b) => a.pnl - b.pnl);
-  }, [filtered]);
-
-  if (!pnl.length) {
-    return (
-      <div style={{ ...S.card, textAlign: "center", padding: 60 }}>
-        <div style={{ fontSize: 40, marginBottom: 16 }}>📊</div>
-        <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>No Liquidation P&L Data</div>
-        <div style={{ color: T.textMuted }}>Upload your Liquidation P&L Excel file in the Data Setup tab</div>
-      </div>
-    );
+const globalCSS = `
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700;0,9..40,900&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #080C18; }
+  .trow:hover td { background: #131B2E !important; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #0B0F1A; }
+  ::-webkit-scrollbar-thumb { background: #2D3B55; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3E5070; }
+  button:hover { opacity: 0.88; }
+  button:active { transform: scale(0.97); }
+  input:focus, textarea:focus, select:focus { border-color: #4F8EF7 !important; box-shadow: 0 0 0 2px #4F8EF720; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  @media (max-width: 1100px) {
+    .quote-layout { grid-template-columns: 1fr !important; }
   }
-
-  return (
-    <div>
-      {/* Filters */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-        <select style={S.select} value={regionFilter} onChange={(e) => setRegionFilter(e.target.value)}>
-          {regions.map((r) => <option key={r} value={r}>{r === "ALL" ? "All Regions" : r}</option>)}
-        </select>
-        <select style={S.select} value={ownerFilter} onChange={(e) => setOwnerFilter(e.target.value)}>
-          {owners.map((o) => <option key={o} value={o}>{o === "ALL" ? "All Owners" : o}</option>)}
-        </select>
-        <select style={S.select} value={ageFilter} onChange={(e) => setAgeFilter(e.target.value)}>
-          {ageBuckets.map((a) => <option key={a} value={a}>{a === "ALL" ? "All Age Buckets" : a}</option>)}
-        </select>
-        <div style={{ marginLeft: "auto", color: T.textMuted, fontSize: 13, alignSelf: "center" }}>
-          Showing {filtered.length.toLocaleString()} of {pnl.length.toLocaleString()} records
-        </div>
-      </div>
-
-      {/* KPI Cards */}
-      {metrics && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 20 }}>
-          <div style={S.metric}>
-            <div style={S.metricVal(T.red)}>{fmt(metrics.totalPnl)}</div>
-            <div style={S.metricLabel}>Total P&L</div>
-          </div>
-          <div style={S.metric}>
-            <div style={S.metricVal(T.red)}>{fmt(metrics.avgLoss)}</div>
-            <div style={S.metricLabel}>Avg Loss/Car</div>
-          </div>
-          <div style={S.metric}>
-            <div style={S.metricVal(T.text)}>{metrics.cars.toLocaleString()}</div>
-            <div style={S.metricLabel}>Cars Sold</div>
-          </div>
-          <div style={S.metric}>
-            <div style={S.metricVal(T.green)}>{fmt(metrics.avgSell)}</div>
-            <div style={S.metricLabel}>Avg Sell Price</div>
-          </div>
-          <div style={S.metric}>
-            <div style={S.metricVal(T.amber)}>{pct(metrics.margin)}</div>
-            <div style={S.metricLabel}>P&L Margin</div>
-          </div>
-        </div>
-      )}
-
-      {/* Region Breakdown Table */}
-      <div style={S.card}>
-        <div style={S.cardTitle}>Region-wise P&L Breakdown</div>
-        <div style={{ overflowX: "auto", maxHeight: 400 }}>
-          <table style={S.table}>
-            <thead>
-              <tr>
-                <th style={S.th}>Region</th>
-                <th style={{ ...S.th, textAlign: "right" }}>Cars</th>
-                <th style={{ ...S.th, textAlign: "right" }}>Total P&L</th>
-                <th style={{ ...S.th, textAlign: "right" }}>Total Loss</th>
-                <th style={{ ...S.th, textAlign: "right" }}>Avg Loss/Car</th>
-                <th style={S.th}>Impact</th>
-              </tr>
-            </thead>
-            <tbody>
-              {regionBreakdown.map((r) => (
-                <tr key={r.region} style={{ transition: "background 0.15s" }} onMouseEnter={(e) => (e.currentTarget.style.background = T.cardAlt)} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
-                  <td style={{ ...S.td, fontWeight: 600 }}>{r.region}</td>
-                  <td style={{ ...S.td, textAlign: "right" }}>{r.cars}</td>
-                  <td style={{ ...S.td, textAlign: "right", color: r.pnl < 0 ? T.red : T.green }}>{fmt(r.pnl)}</td>
-                  <td style={{ ...S.td, textAlign: "right", color: T.red }}>{fmt(r.loss)}</td>
-                  <td style={{ ...S.td, textAlign: "right" }}>{fmt(r.avgLoss)}</td>
-                  <td style={S.td}>
-                    <div style={{ width: 80, height: 6, background: T.border, borderRadius: 3, overflow: "hidden" }}>
-                      <div style={{ width: `${Math.min(100, Math.abs(r.pnl) / (Math.abs(metrics?.totalPnl || 1)) * 100)}%`, height: "100%", background: T.red, borderRadius: 3 }} />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ═════════════════════════════════════════════════════════════
-//  STUCK INVENTORY BROWSER
-// ═════════════════════════════════════════════════════════════
-function StuckInventory({ data }) {
-  const si = data.stuckInventory || [];
-  const [search, setSearch] = useState("");
-  const [regionFilter, setRegionFilter] = useState("ALL");
-  const [ageFilter, setAgeFilter] = useState("ALL");
-  const [page, setPage] = useState(0);
-  const PAGE_SIZE = 50;
-
-  const regions = useMemo(() => ["ALL", ...new Set(si.map((r) => r.REGION || r.Region || "").filter(Boolean))], [si]);
-  const ageBuckets = useMemo(() => ["ALL", ...new Set(si.map((r) => r.AGE_BUCKET || r.Age_Bucket || r.SI_AGE_BUCKET || "").filter(Boolean))], [si]);
-
-  const filtered = useMemo(() => {
-    let rows = si;
-    if (regionFilter !== "ALL") rows = rows.filter((r) => (r.REGION || r.Region) === regionFilter);
-    if (ageFilter !== "ALL") rows = rows.filter((r) => (r.AGE_BUCKET || r.Age_Bucket || r.SI_AGE_BUCKET) === ageFilter);
-    if (search) {
-      const s = search.toLowerCase();
-      rows = rows.filter((r) => Object.values(r).some((v) => String(v).toLowerCase().includes(s)));
-    }
-    return rows;
-  }, [si, regionFilter, ageFilter, search]);
-
-  const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-
-  // Columns to display
-  const displayCols = useMemo(() => {
-    if (!si.length) return [];
-    const all = Object.keys(si[0]);
-    const priority = ["LEAD_ID", "Lead_Id", "REGION", "Region", "MAKE", "Make", "MODEL", "Model", "BUYING_PRICE", "Buying_Price", "NEW_MSP", "TP", "AGE_BUCKET", "Age_Bucket", "C2D Flag", "C2D_Flag", "Anchor"];
-    const found = priority.filter((c) => all.includes(c));
-    if (found.length < 5) return all.slice(0, 10);
-    return found;
-  }, [si]);
-
-  if (!si.length) {
-    return (
-      <div style={{ ...S.card, textAlign: "center", padding: 60 }}>
-        <div style={{ fontSize: 40, marginBottom: 16 }}>📊</div>
-        <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>No Stuck Inventory Data</div>
-        <div style={{ color: T.textMuted }}>Connect your Google Sheet in the Data Setup tab</div>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      {/* Filters */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-        <input style={{ ...S.input, maxWidth: 300 }} placeholder="🔍 Search by Lead ID, Make, Model..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} />
-        <select style={S.select} value={regionFilter} onChange={(e) => { setRegionFilter(e.target.value); setPage(0); }}>
-          {regions.map((r) => <option key={r} value={r}>{r === "ALL" ? "All Regions" : r}</option>)}
-        </select>
-        <select style={S.select} value={ageFilter} onChange={(e) => { setAgeFilter(e.target.value); setPage(0); }}>
-          {ageBuckets.map((a) => <option key={a} value={a}>{a === "ALL" ? "All Age Buckets" : a}</option>)}
-        </select>
-        <div style={{ marginLeft: "auto", color: T.textMuted, fontSize: 13, alignSelf: "center" }}>
-          {filtered.length.toLocaleString()} cars
-          {data.stuckInventory && <span style={{ ...S.badge(T.green), marginLeft: 10 }}>🔗 Google Sheets — Live</span>}
-        </div>
-      </div>
-
-      {/* Summary metrics */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 20 }}>
-        {(() => {
-          const total = filtered.length;
-          const regionCount = new Set(filtered.map((r) => r.REGION || r.Region)).size;
-          const avgBuy = total ? filtered.reduce((s, r) => s + (num(r.BUYING_PRICE || r.Buying_Price) || 0), 0) / total : 0;
-          const c2dCount = filtered.filter((r) => (r["C2D Flag"] || r.C2D_Flag || "") === "Y" || (r["C2D Flag"] || r.C2D_Flag || "") === "1").length;
-          return [
-            { label: "Total Cars", val: total.toLocaleString(), color: T.accent },
-            { label: "Regions", val: regionCount, color: T.purple },
-            { label: "Avg Buying Price", val: fmt(avgBuy), color: T.amber },
-            { label: "C2D Flagged", val: c2dCount.toLocaleString(), color: T.green },
-          ].map((m) => (
-            <div key={m.label} style={S.metric}>
-              <div style={S.metricVal(m.color)}>{m.val}</div>
-              <div style={S.metricLabel}>{m.label}</div>
-            </div>
-          ));
-        })()}
-      </div>
-
-      {/* Table */}
-      <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
-        <div style={{ overflowX: "auto", maxHeight: 500 }}>
-          <table style={S.table}>
-            <thead>
-              <tr>{displayCols.map((c) => <th key={c} style={S.th}>{c}</th>)}</tr>
-            </thead>
-            <tbody>
-              {paged.map((row, i) => (
-                <tr key={i} style={{ transition: "background 0.15s" }} onMouseEnter={(e) => (e.currentTarget.style.background = T.cardAlt)} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
-                  {displayCols.map((c) => (
-                    <td key={c} style={S.td}>{row[c] ?? ""}</td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {/* Pagination */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderTop: `1px solid ${T.border}` }}>
-          <button style={S.btn("secondary")} onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0}>← Prev</button>
-          <span style={{ color: T.textMuted, fontSize: 13 }}>Page {page + 1} of {totalPages || 1}</span>
-          <button style={S.btn("secondary")} onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1}>Next →</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ═════════════════════════════════════════════════════════════
-//  QUOTE SUBMISSION
-// ═════════════════════════════════════════════════════════════
-function QuoteSubmission({ data }) {
-  const si = data.stuckInventory || [];
-  const [leadId, setLeadId] = useState("");
-  const [car, setCar] = useState(null);
-  const [quote, setQuote] = useState({ dealerName: "", bidAmount: "", notes: "" });
-  const [result, setResult] = useState(null);
-  const [history, setHistory] = useState([]);
-
-  const findCar = () => {
-    if (!leadId.trim()) return;
-    const found = si.find((r) => String(r.LEAD_ID || r.Lead_Id || r.lead_id || "").trim() === leadId.trim());
-    setCar(found || "NOT_FOUND");
-    setResult(null);
-  };
-
-  const submitQuote = () => {
-    if (!car || car === "NOT_FOUND" || !quote.bidAmount) return;
-    const bid = num(quote.bidAmount);
-    const msp = num(car.NEW_MSP || car.MSP || car.TP) || 0;
-    const buy = num(car.BUYING_PRICE || car.Buying_Price) || 0;
-
-    let status, color;
-    if (bid >= msp) {
-      status = "APPROVED";
-      color = T.green;
-    } else if (msp && bid >= msp * 0.9) {
-      status = "ESCALATED";
-      color = T.amber;
-    } else {
-      status = "REJECTED";
-      color = T.red;
-    }
-
-    const entry = {
-      id: Date.now(),
-      leadId: leadId,
-      make: car.MAKE || car.Make || "",
-      model: car.MODEL || car.Model || "",
-      dealer: quote.dealerName,
-      bid,
-      msp,
-      buyingPrice: buy,
-      pnl: bid - buy,
-      status,
-      time: new Date().toLocaleString(),
-    };
-    setResult({ status, color, entry });
-    setHistory((h) => [entry, ...h]);
-  };
-
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-      {/* Left: Form */}
-      <div>
-        <div style={S.card}>
-          <div style={S.cardTitle}>🔍 Find Car by Lead ID</div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <input style={{ ...S.input, flex: 1 }} placeholder="Enter Lead ID..." value={leadId} onChange={(e) => setLeadId(e.target.value)} onKeyDown={(e) => e.key === "Enter" && findCar()} />
-            <button style={S.btn("primary")} onClick={findCar}>Search</button>
-          </div>
-
-          {car === "NOT_FOUND" && (
-            <div style={{ color: T.red, marginTop: 12, fontSize: 13 }}>⚠ Car not found in Stuck Inventory. Check the Lead ID.</div>
-          )}
-
-          {car && car !== "NOT_FOUND" && (
-            <div style={{ marginTop: 16, padding: 16, background: T.cardAlt, borderRadius: 10, border: `1px solid ${T.border}` }}>
-              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 10 }}>
-                {car.MAKE || car.Make} {car.MODEL || car.Model}
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 13 }}>
-                {[
-                  ["Region", car.REGION || car.Region],
-                  ["Buying Price", fmt(num(car.BUYING_PRICE || car.Buying_Price))],
-                  ["MSP", fmt(num(car.NEW_MSP || car.MSP || car.TP))],
-                  ["Age Bucket", car.AGE_BUCKET || car.Age_Bucket],
-                  ["Anchor", car.Anchor],
-                  ["C2D Flag", car["C2D Flag"] || car.C2D_Flag],
-                ].map(([label, val]) => (
-                  <div key={label}>
-                    <span style={{ color: T.textMuted }}>{label}: </span>
-                    <span style={{ fontWeight: 600 }}>{val || "—"}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {car && car !== "NOT_FOUND" && (
-          <div style={{ ...S.card, marginTop: 0 }}>
-            <div style={S.cardTitle}>💰 Submit Dealer Quote</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <input style={S.input} placeholder="Dealer Name" value={quote.dealerName} onChange={(e) => setQuote({ ...quote, dealerName: e.target.value })} />
-              <input style={S.input} placeholder="Bid Amount (₹)" value={quote.bidAmount} onChange={(e) => setQuote({ ...quote, bidAmount: e.target.value })} />
-              <textarea style={{ ...S.input, minHeight: 60, resize: "vertical" }} placeholder="Notes (optional)" value={quote.notes} onChange={(e) => setQuote({ ...quote, notes: e.target.value })} />
-              <button style={S.btn("primary")} onClick={submitQuote}>Submit Quote →</button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Right: Result + History */}
-      <div>
-        {result && (
-          <div style={{ ...S.card, background: `${result.color}11`, border: `2px solid ${result.color}44`, textAlign: "center", marginBottom: 16 }}>
-            <div style={{ fontSize: 48, marginBottom: 8 }}>
-              {result.status === "APPROVED" ? "✅" : result.status === "ESCALATED" ? "⚠️" : "❌"}
-            </div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: result.color }}>{result.status}</div>
-            <div style={{ color: T.textMuted, fontSize: 13, marginTop: 8 }}>
-              Bid: {fmt(result.entry.bid)} | MSP: {fmt(result.entry.msp)} | P&L: <span style={{ color: result.entry.pnl >= 0 ? T.green : T.red }}>{fmt(result.entry.pnl)}</span>
-            </div>
-          </div>
-        )}
-
-        <div style={S.card}>
-          <div style={S.cardTitle}>📋 Quote History ({history.length})</div>
-          {!history.length ? (
-            <div style={{ color: T.textMuted, textAlign: "center", padding: 20 }}>No quotes submitted yet</div>
-          ) : (
-            <div style={{ maxHeight: 400, overflowY: "auto" }}>
-              {history.map((h) => (
-                <div key={h.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${T.border}08` }}>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>{h.make} {h.model} — {h.dealer}</div>
-                    <div style={{ color: T.textMuted, fontSize: 12 }}>Lead: {h.leadId} | {h.time}</div>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={S.badge(h.status === "APPROVED" ? T.green : h.status === "ESCALATED" ? T.amber : T.red)}>{h.status}</div>
-                    <div style={{ fontSize: 12, color: T.textMuted, marginTop: 4 }}>Bid: {fmt(h.bid)}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ═════════════════════════════════════════════════════════════
-//  AUCTION SLOTS
-// ═════════════════════════════════════════════════════════════
-function AuctionSlots({ data }) {
-  const ma = data.masterAuction || [];
-  const [slots, setSlots] = useState(4);
-  const [duration, setDuration] = useState(30);
-  const [cycles, setCycles] = useState(3);
-
-  const slotAssignment = useMemo(() => {
-    if (!ma.length) return [];
-    const result = [];
-    for (let i = 0; i < slots; i++) {
-      result.push({
-        slot: i + 1,
-        cars: ma.filter((_, idx) => idx % slots === i),
-        startMin: i * duration,
-      });
-    }
-    return result;
-  }, [ma, slots, duration]);
-
-  if (!ma.length) {
-    return (
-      <div style={{ ...S.card, textAlign: "center", padding: 60 }}>
-        <div style={{ fontSize: 40, marginBottom: 16 }}>🔨</div>
-        <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>No Master Auction Data</div>
-        <div style={{ color: T.textMuted }}>Upload your Master Auction Excel file in the Data Setup tab</div>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      {/* Config */}
-      <div style={S.card}>
-        <div style={S.cardTitle}>⚙️ Auction Slot Configuration</div>
-        <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-          <div>
-            <label style={{ fontSize: 12, color: T.textMuted, display: "block", marginBottom: 4 }}>Number of Slots</label>
-            <input type="number" style={{ ...S.input, width: 100 }} value={slots} onChange={(e) => setSlots(Math.max(1, parseInt(e.target.value) || 1))} />
-          </div>
-          <div>
-            <label style={{ fontSize: 12, color: T.textMuted, display: "block", marginBottom: 4 }}>Duration per Slot (min)</label>
-            <input type="number" style={{ ...S.input, width: 100 }} value={duration} onChange={(e) => setDuration(Math.max(5, parseInt(e.target.value) || 5))} />
-          </div>
-          <div>
-            <label style={{ fontSize: 12, color: T.textMuted, display: "block", marginBottom: 4 }}>Rotation Cycles</label>
-            <input type="number" style={{ ...S.input, width: 100 }} value={cycles} onChange={(e) => setCycles(Math.max(1, parseInt(e.target.value) || 1))} />
-          </div>
-          <div style={{ alignSelf: "flex-end" }}>
-            <div style={{ fontSize: 13, color: T.textMuted }}>
-              Total Auction Time: <strong style={{ color: T.accent }}>{slots * duration * cycles} min</strong> ({(slots * duration * cycles / 60).toFixed(1)} hrs)
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Slot cards */}
-      <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(slots, 4)}, 1fr)`, gap: 12 }}>
-        {slotAssignment.map((slot) => (
-          <div key={slot.slot} style={{ ...S.card, borderTop: `3px solid ${[T.accent, T.green, T.amber, T.purple, T.red][slot.slot % 5]}` }}>
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>Slot {slot.slot}</div>
-            <div style={{ fontSize: 13, color: T.textMuted, marginBottom: 12 }}>
-              {slot.cars.length} cars • Starts at T+{slot.startMin}min
-            </div>
-            <div style={{ maxHeight: 200, overflowY: "auto", fontSize: 12 }}>
-              {slot.cars.slice(0, 10).map((car, i) => (
-                <div key={i} style={{ padding: "6px 0", borderBottom: `1px solid ${T.border}08`, display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontWeight: 600 }}>{car.APPOINTMENT_ID || car.Appointment_Id || `#${i + 1}`}</span>
-                  <span style={{ color: T.textMuted }}>{car.Owner || ""}</span>
-                </div>
-              ))}
-              {slot.cars.length > 10 && <div style={{ color: T.textDim, padding: "6px 0", textAlign: "center" }}>+{slot.cars.length - 10} more</div>}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ═════════════════════════════════════════════════════════════
-//  PRICING CONTROL RULES
-// ═════════════════════════════════════════════════════════════
-function PricingRules({ data }) {
-  const si = data.stuckInventory || [];
-  const [rules, setRules] = useState([
-    { id: 1, name: "Default Drop", ageBuckets: ["ALL"], regions: ["ALL"], dropPct: 5, active: true },
-  ]);
-  const [editing, setEditing] = useState(null);
-
-  const regions = useMemo(() => [...new Set(si.map((r) => r.REGION || r.Region || "").filter(Boolean))], [si]);
-  const ageBuckets = useMemo(() => [...new Set(si.map((r) => r.AGE_BUCKET || r.Age_Bucket || r.SI_AGE_BUCKET || "").filter(Boolean))], [si]);
-
-  const addRule = () => {
-    const newRule = { id: Date.now(), name: "New Rule", ageBuckets: ["ALL"], regions: ["ALL"], dropPct: 5, active: true };
-    setRules([...rules, newRule]);
-    setEditing(newRule.id);
-  };
-
-  const updateRule = (id, field, value) => {
-    setRules(rules.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
-  };
-
-  const deleteRule = (id) => {
-    setRules(rules.filter((r) => r.id !== id));
-    if (editing === id) setEditing(null);
-  };
-
-  // Count affected cars
-  const countAffected = (rule) => {
-    if (!si.length) return 0;
-    return si.filter((r) => {
-      const reg = r.REGION || r.Region || "";
-      const age = r.AGE_BUCKET || r.Age_Bucket || r.SI_AGE_BUCKET || "";
-      const regionMatch = rule.regions.includes("ALL") || rule.regions.includes(reg);
-      const ageMatch = rule.ageBuckets.includes("ALL") || rule.ageBuckets.includes(age);
-      return regionMatch && ageMatch;
-    }).length;
-  };
-
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <div style={S.cardTitle}>📐 Pricing Drop Rules</div>
-        <button style={S.btn("primary")} onClick={addRule}>+ Add Rule</button>
-      </div>
-
-      {rules.map((rule) => (
-        <div key={rule.id} style={{ ...S.card, borderLeft: `4px solid ${rule.active ? T.accent : T.textDim}`, opacity: rule.active ? 1 : 0.6 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-              <input
-                style={{ ...S.input, width: 200, fontWeight: 700 }}
-                value={rule.name}
-                onChange={(e) => updateRule(rule.id, "name", e.target.value)}
-              />
-              <span style={S.badge(rule.active ? T.green : T.textDim)}>
-                {rule.active ? "Active" : "Inactive"}
-              </span>
-              <span style={{ color: T.textMuted, fontSize: 12 }}>{countAffected(rule)} cars affected</span>
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button style={S.btn("secondary")} onClick={() => updateRule(rule.id, "active", !rule.active)}>
-                {rule.active ? "Disable" : "Enable"}
-              </button>
-              <button style={{ ...S.btn("secondary"), color: T.red }} onClick={() => deleteRule(rule.id)}>Delete</button>
-            </div>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 200px", gap: 16 }}>
-            <div>
-              <label style={{ fontSize: 12, color: T.textMuted, display: "block", marginBottom: 4 }}>Age Buckets</label>
-              <select style={{ ...S.select, width: "100%" }} value={rule.ageBuckets[0]} onChange={(e) => updateRule(rule.id, "ageBuckets", [e.target.value])}>
-                <option value="ALL">All Buckets</option>
-                {ageBuckets.map((a) => <option key={a} value={a}>{a}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: 12, color: T.textMuted, display: "block", marginBottom: 4 }}>Regions</label>
-              <select style={{ ...S.select, width: "100%" }} value={rule.regions[0]} onChange={(e) => updateRule(rule.id, "regions", [e.target.value])}>
-                <option value="ALL">All Regions</option>
-                {regions.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: 12, color: T.textMuted, display: "block", marginBottom: 4 }}>Price Drop %</label>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <input
-                  type="range"
-                  min="0" max="30" step="1"
-                  value={rule.dropPct}
-                  onChange={(e) => updateRule(rule.id, "dropPct", parseInt(e.target.value))}
-                  style={{ flex: 1 }}
-                />
-                <span style={{ fontWeight: 700, color: T.amber, minWidth: 40, textAlign: "right" }}>{rule.dropPct}%</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ═════════════════════════════════════════════════════════════
-//  MAIN APP
-// ═════════════════════════════════════════════════════════════
-export default function App() {
-  const [tab, setTab] = useState("setup");
-  const [data, setData] = useState({
-    stuckInventory: null,
-    liquidationPnl: null,
-    masterAuction: null,
-  });
-
-  const hasData = data.stuckInventory || data.liquidationPnl || data.masterAuction;
-
-  const tabs = [
-    { id: "setup", label: "⚙️ Data Setup" },
-    { id: "dashboard", label: "📊 Dashboard" },
-    { id: "inventory", label: "🚗 Stuck Inventory" },
-    { id: "quotes", label: "💰 Quotes" },
-    { id: "pricing", label: "📐 Pricing Rules" },
-    { id: "slots", label: "🔨 Auction Slots" },
-  ];
-
-  return (
-    <div style={S.app}>
-      {/* Header */}
-      <div style={S.header}>
-        <div style={S.logo}>Cars24 • Inventory Command Center</div>
-        <div style={S.nav}>
-          {tabs.map((t) => (
-            <button key={t.id} style={S.navBtn(tab === t.id)} onClick={() => setTab(t.id)}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-        {hasData && (
-          <div style={{ display: "flex", gap: 6 }}>
-            {data.stuckInventory && <span style={{ ...S.badge(T.green), fontSize: 11 }}>SI ✓</span>}
-            {data.liquidationPnl && <span style={{ ...S.badge(T.accent), fontSize: 11 }}>P&L ✓</span>}
-            {data.masterAuction && <span style={{ ...S.badge(T.purple), fontSize: 11 }}>MA ✓</span>}
-          </div>
-        )}
-      </div>
-
-      {/* Content */}
-      <div style={S.main}>
-        {tab === "setup" && <DataSetup data={data} setData={setData} />}
-        {tab === "dashboard" && <LiquidationDashboard data={data} />}
-        {tab === "inventory" && <StuckInventory data={data} />}
-        {tab === "quotes" && <QuoteSubmission data={data} />}
-        {tab === "pricing" && <PricingRules data={data} />}
-        {tab === "slots" && <AuctionSlots data={data} />}
-      </div>
-    </div>
-  );
-}
+`;
