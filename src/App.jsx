@@ -36,7 +36,7 @@ function evaluateQuote(bid, buyingPrice, ageBucket) {
     return { status: "REJECTED", reason: `Loss \u20B9${Math.abs(pnl).toLocaleString("en-IN")} exceeds \u20B97,000 max for 0-30 day bucket` };
   }
   if (bucket.includes("30-60") || bucket.includes("30 - 60") || bucket === "30-60") {
-    if (pnl >= -25000) return { status: "AUTO_APPROVED", reason: `Loss \u20B9${Math.abs(pnl).toLocaleString("en-IN")} is within \u20B92,500 limit for 30-60 day bucket` };
+    if (pnl >= -2500) return { status: "AUTO_APPROVED", reason: `Loss \u20B9${Math.abs(pnl).toLocaleString("en-IN")} is within \u20B92,500 limit for 30-60 day bucket` };
     return { status: "REJECTED", reason: `Loss \u20B9${Math.abs(pnl).toLocaleString("en-IN")} exceeds \u20B92,500 max for 30-60 day bucket` };
   }
   if (bucket.includes("60-90") || bucket.includes("60 - 90") || bucket === "60-90") {
@@ -47,16 +47,22 @@ function evaluateQuote(bid, buyingPrice, ageBucket) {
   return { status: "REJECTED", reason: `Age bucket "${ageBucket}" requires manual review (90+ days or unrecognized)` };
 }
 
-// ── Slack Webhook ────────────────────────────────────────────────────
+// ── Slack Webhook (CORS workaround: form-encoded payload) ────────────
 async function sendSlackMessage(webhookUrl, message) {
   if (!webhookUrl) return { ok: false, error: "No Slack webhook URL configured" };
   try {
-    const res = await fetch(webhookUrl, {
+    // Use form-encoded payload to avoid CORS preflight.
+    // Slack accepts payload as a form field; browser treats this as a "simple request".
+    const formData = new FormData();
+    formData.append("payload", JSON.stringify({ text: message }));
+
+    await fetch(webhookUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: message }),
+      mode: "no-cors",  // bypass CORS — we won't be able to read response, but message will send
+      body: formData,
     });
-    return { ok: res.ok };
+    // With no-cors mode, we can't read the response, so we assume success if no error thrown
+    return { ok: true };
   } catch (e) {
     return { ok: false, error: e.message };
   }
