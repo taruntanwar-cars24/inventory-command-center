@@ -888,211 +888,494 @@ function DashboardTab() {
 }
 
 // ═════════════════════════════════════════════════════════════════════
-//  TAB 5 — AUCTION CONSOLE
+//  TAB 5 — AUCTION CONSOLE (Slot-based, mirrors Copy_Experiment_Liquidation)
 // ═════════════════════════════════════════════════════════════════════
+//  Mirrors the control pattern of the master Excel sheet:
+//   - Z column filters APPOINTMENT_IDs by SI bucket (regex match on bucket name)
+//   - E column computes Anchor using $D$4 (base multiplier) and $D$2 (drop factor)
+//  Here each slot = one group of SI buckets, and each bucket has its own
+//  anchor slider (average anchor price applied to all cars in that bucket).
+// ═════════════════════════════════════════════════════════════════════
+const SLOT_NAMES = ["A", "B", "C", "D", "E", "F", "G", "H"];
+const CANONICAL_BUCKETS = ["0-30", "30-60", "60-90", "90-120", "120-150", "150-180", "180+"];
+
+const sortBuckets = (arr) => [...arr].sort((a, b) => {
+  const na = parseInt(String(a).match(/\d+/)?.[0] || "0", 10);
+  const nb = parseInt(String(b).match(/\d+/)?.[0] || "0", 10);
+  return na - nb;
+});
+
 function AuctionTab({ rows, slackUrl, sheetUrl, managerEmail, currentUser }) {
-  const [bucketF, setBucketF] = useState("ALL");
-  const [regionF, setRegionF] = useState("ALL");
-  const [zoneF, setZoneF] = useState("ALL");
-  const [channelF, setChannelF] = useState("ALL");
-  const [smcF, setSmcF] = useState("ALL"); // Same Month Cancellation
-  const [stopF, setStopF] = useState("ALL");
-  const [anchorStrategy, setAnchorStrategy] = useState("buying_minus");
-  const [lossAmount, setLossAmount] = useState("5000");
+  const [numSlots, setNumSlots] = useState(3);
+  // slotAssignments: { "A": Set<bucket>, "B": Set<bucket>, ... }
+  const [slotAssignments, setSlotAssignments] = useState({
+    A: new Set(), B: new Set(), C: new Set(),
+  });
+  // bucketAnchors: { "0-30": 250000, ... }  (average anchor per bucket)
+  const [bucketAnchors, setBucketAnchors] = useState({});
   const [running, setRunning] = useState(false);
   const [lastRun, setLastRun] = useState(null);
 
-  const buckets = useMemo(() => ["ALL", ...new Set(rows.map((r) => r.AGE_BUCKET).filter(Boolean))], [rows]);
-  const regions = useMemo(() => ["ALL", ...new Set(rows.map((r) => r.REGION).filter(Boolean))].sort(), [rows]);
-  const zones = useMemo(() => ["ALL", ...new Set(rows.map((r) => r.ZONE || r.PARKING_REGION).filter(Boolean))].sort(), [rows]);
+  // ── 1. Discover SI buckets from the uploaded inventory ───────────
+  const SI_BUCKETS = useMemo(() => {
+    const found = new Set();
+    for (const r of rows) {
+      const b = String(r.AGE_BUCKET || "").trim();
+      if (b) found.add(b);
+    }
+    // If nothing found (column missing), fall back to canonical list
+    return found.size ? sortBuckets([...found]) : CANONICAL_BUCKETS;
+  }, [rows]);
 
-  const filtered = useMemo(() => {
-    let f = rows;
-    if (bucketF !== "ALL") f = f.filter((r) => r.AGE_BUCKET === bucketF);
-    if (regionF !== "ALL") f = f.filter((r) => r.REGION === regionF);
-    if (zoneF !== "ALL") f = f.filter((r) => (r.ZONE || r.PARKING_REGION) === zoneF);
-    if (channelF === "C2D") f = f.filter((r) => truthy(r["C2D Flag"]));
-    if (channelF === "C2B") f = f.filter((r) => !truthy(r["C2D Flag"]));
-    if (smcF === "YES") f = f.filter((r) => truthy(r["SMC"]) || truthy(r["Same Month Cancellation"]));
-    if (smcF === "NO") f = f.filter((r) => !truthy(r["SMC"]) && !truthy(r["Same Month Cancellation"]));
-    if (stopF === "YES") f = f.filter((r) => truthy(r["Auction Stop"]));
-    if (stopF === "NO") f = f.filter((r) => !truthy(r["Auction Stop"]));
-    return f;
-  }, [rows, bucketF, regionF, zoneF, channelF, smcF, stopF]);
+  // ── 2. Aggregate cars by bucket ──────────────────────────────────
+  const bucketStats = useMemo(() => {
+    const map = {};
+    for (const b of SI_BUCKETS) map[b] = { bucket: b, count: 0, totalBP: 0, cars: [] };
+    for (const r of rows) {
+      const b = String(r.AGE_BUCKET || "").trim();
+      if (!map[b]) continue;
+      const bp = toNum(r.BUYING_PRICE) || 0;
+      map[b].count++;
+      map[b].totalBP += bp;
+      map[b].cars.push(r);
+    }
+    for (const b of SI_BUCKETS) {
+      map[b].avgBP = map[b].count ? Math.round(map[b].totalBP / map[b].count) : 0;
+    }
+    return map;
+  }, [rows, SI_BUCKETS]);
 
-  const computeAnchor = (row) => {
-    const buy = toNum(row.BUYING_PRICE) || 0;
-    const loss = toNum(lossAmount) || 0;
-    if (anchorStrategy === "buying_minus") return buy - loss;
-    if (anchorStrategy === "buying_minus_pct") return Math.round(buy * (1 - loss / 100));
-    if (anchorStrategy === "fixed") return loss;
-    return buy;
+  // ── 3. Initialize default anchor per bucket (95% of avg BP) ──────
+  useEffect(() => {
+    setBucketAnchors((prev) => {
+      const next = { ...prev };
+      for (const b of SI_BUCKETS) {
+        if (next[b] == null && bucketStats[b]?.avgBP > 0) {
+          next[b] = Math.round(bucketStats[b].avgBP * 0.95);
+        }
+      }
+      return next;
+    });
+  }, [bucketStats, SI_BUCKETS]);
+
+  // ── 4. Auto-distribute buckets across slots when slot count changes ──
+  useEffect(() => {
+    setSlotAssignments((prev) => {
+      // Only auto-seed if all current slots are empty (first load / reset)
+      const activeNow = SLOT_NAMES.slice(0, numSlots);
+      const existingSlots = Object.keys(prev);
+      const anyAssigned = existingSlots.some((s) => prev[s] && prev[s].size > 0);
+
+      const next = {};
+      for (const s of activeNow) next[s] = prev[s] ? new Set(prev[s]) : new Set();
+
+      if (!anyAssigned && SI_BUCKETS.length) {
+        // Distribute buckets round-robin across slots
+        SI_BUCKETS.forEach((b, i) => {
+          if (bucketStats[b]?.count > 0) {
+            const slot = activeNow[i % activeNow.length];
+            next[slot].add(b);
+          }
+        });
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [numSlots, SI_BUCKETS.length]);
+
+  const activeSlots = SLOT_NAMES.slice(0, numSlots);
+
+  // ── 5. Helpers ───────────────────────────────────────────────────
+  // Which slot currently owns a given bucket? (buckets are exclusive across slots)
+  const bucketOwner = (bucket) => {
+    for (const s of activeSlots) {
+      if (slotAssignments[s]?.has(bucket)) return s;
+    }
+    return null;
   };
 
-  const stats = useMemo(() => {
-    const n = filtered.length;
-    const buy = filtered.reduce((s, r) => s + (toNum(r.BUYING_PRICE) || 0), 0);
-    const anchor = filtered.reduce((s, r) => s + computeAnchor(r), 0);
-    return { n, buy, anchor, pnl: anchor - buy, avg: n ? (anchor - buy) / n : 0 };
-  }, [filtered, anchorStrategy, lossAmount]);
+  // Toggle a bucket in a slot. If already in another slot, move it here.
+  const toggleBucket = (slot, bucket) => {
+    setSlotAssignments((prev) => {
+      const next = {};
+      for (const s of activeSlots) next[s] = new Set(prev[s] || []);
+      const owner = activeSlots.find((s) => next[s].has(bucket));
+      if (owner === slot) {
+        next[slot].delete(bucket); // uncheck → remove from auction
+      } else {
+        if (owner) next[owner].delete(bucket); // move from old slot
+        next[slot].add(bucket);
+      }
+      return next;
+    });
+  };
 
+  const setBucketAnchor = (bucket, val) => {
+    setBucketAnchors((prev) => ({ ...prev, [bucket]: Number(val) }));
+  };
+
+  // ── 6. Per-slot aggregated stats ─────────────────────────────────
+  const slotStats = useMemo(() => {
+    const out = {};
+    for (const s of activeSlots) {
+      const bs = [...(slotAssignments[s] || [])];
+      let cars = 0, totalBP = 0, totalAnchor = 0;
+      for (const b of bs) {
+        const bkt = bucketStats[b];
+        if (!bkt) continue;
+        cars += bkt.count;
+        totalBP += bkt.totalBP;
+        const a = bucketAnchors[b] ?? bkt.avgBP;
+        totalAnchor += a * bkt.count;
+      }
+      out[s] = {
+        cars, totalBP, totalAnchor,
+        avgBP: cars ? Math.round(totalBP / cars) : 0,
+        avgAnchor: cars ? Math.round(totalAnchor / cars) : 0,
+        pnl: totalAnchor - totalBP,
+      };
+    }
+    return out;
+  }, [activeSlots, slotAssignments, bucketStats, bucketAnchors]);
+
+  // ── 7. Global total across all slots ─────────────────────────────
+  const globalStats = useMemo(() => {
+    let cars = 0, bp = 0, anchor = 0;
+    Object.values(slotStats).forEach((s) => {
+      cars += s.cars; bp += s.totalBP; anchor += s.totalAnchor;
+    });
+    return { cars, bp, anchor, pnl: anchor - bp, avgPnL: cars ? (anchor - bp) / cars : 0 };
+  }, [slotStats]);
+
+  // ── 8. Run auction: log every car to sheet, tagged with slot + bucket ──
   const runAuction = async () => {
-    if (!filtered.length) { alert("No cars match the filters."); return; }
+    if (!globalStats.cars) { alert("No buckets selected. Check at least one bucket in any slot."); return; }
     if (!currentUser) { alert("Please enter your name in the header first."); return; }
-    if (!confirm(`Run auction on ${filtered.length} cars? Total expected P&L: ${INR(stats.pnl)}`)) return;
+    if (!confirm(`Run auction on ${globalStats.cars.toLocaleString()} cars across ${activeSlots.length} slot(s)?\nExpected P&L: ${INR(globalStats.pnl)}`)) return;
     setRunning(true);
 
     let sent = 0;
-    for (const car of filtered) {
-      const anchor = computeAnchor(car);
-      await appendToSheet(sheetUrl, {
-        timestamp: new Date().toISOString(),
-        appointmentId: car.LEAD_ID,
-        region: car.REGION || "",
-        anchorPrice: anchor,
-        auctionStartFor: "BULK_AUCTION",
-        submittedBy: currentUser,
-        email: managerEmail || "",
-        date: new Date().toLocaleDateString("en-IN"),
-      });
-      sent++;
+    for (const slot of activeSlots) {
+      const buckets = [...(slotAssignments[slot] || [])];
+      for (const b of buckets) {
+        const anchor = bucketAnchors[b] ?? bucketStats[b].avgBP;
+        for (const car of bucketStats[b].cars) {
+          await appendToSheet(sheetUrl, {
+            timestamp: new Date().toISOString(),
+            appointmentId: car.LEAD_ID,
+            region: car.REGION || "",
+            anchorPrice: anchor,
+            auctionStartFor: `SLOT_${slot}_${b}`,
+            submittedBy: currentUser,
+            email: managerEmail || "",
+            date: new Date().toLocaleDateString("en-IN"),
+          });
+          sent++;
+        }
+      }
     }
 
     if (slackUrl) {
+      const summary = activeSlots
+        .filter((s) => slotStats[s].cars > 0)
+        .map((s) => {
+          const bs = [...(slotAssignments[s] || [])];
+          return `• Slot ${s}: ${bs.join(", ")} → ${slotStats[s].cars} cars @ avg anchor ₹${slotStats[s].avgAnchor.toLocaleString("en-IN")}`;
+        })
+        .join("\n");
       await sendSlackMessage(slackUrl,
-        `:hammer: *BULK AUCTION STARTED*\n*Cars:* ${sent}\n*Filters:* Bucket=${bucketF}, Region=${regionF}, Zone=${zoneF}, Channel=${channelF}, SMC=${smcF}, Stop=${stopF}\n*Strategy:* ${anchorStrategy} (${lossAmount})\n*Expected P&L:* ₹${stats.pnl.toLocaleString("en-IN")}\n*By:* ${currentUser}`
+        `:hammer: *BULK AUCTION STARTED*\n*Total:* ${sent} cars | *Expected P&L:* ₹${globalStats.pnl.toLocaleString("en-IN")}\n\n${summary}\n\n*By:* ${currentUser}`
       );
     }
 
-    setLastRun({ count: sent, pnl: stats.pnl, time: new Date().toLocaleString("en-IN") });
+    setLastRun({ count: sent, pnl: globalStats.pnl, time: new Date().toLocaleString("en-IN") });
     setRunning(false);
   };
 
+  const slotColors = ["#3B82F6", "#8B5CF6", "#10B981", "#F59E0B", "#EC4899", "#06B6D4", "#EF4444", "#84CC16"];
+
+  // ═════════════════════════════════════════════════════════════════
+  //  RENDER
+  // ═════════════════════════════════════════════════════════════════
   return (
     <div>
-      <div style={{ ...S.card, marginBottom: 20 }}>
-        <div style={S.cHead}>🔨 Auction Filters</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-          <div>
-            <label style={S.fLabel}>SI Bucket</label>
-            <select style={S.inp} value={bucketF} onChange={(e) => setBucketF(e.target.value)}>
-              {buckets.map((b) => <option key={b} value={b}>{b === "ALL" ? "All Buckets" : b}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={S.fLabel}>Region</label>
-            <select style={S.inp} value={regionF} onChange={(e) => setRegionF(e.target.value)}>
-              {regions.map((r) => <option key={r} value={r}>{r === "ALL" ? "All Regions" : r}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={S.fLabel}>Zone / Parking</label>
-            <select style={S.inp} value={zoneF} onChange={(e) => setZoneF(e.target.value)}>
-              {zones.map((z) => <option key={z} value={z}>{z === "ALL" ? "All Zones" : z}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={S.fLabel}>Channel</label>
-            <select style={S.inp} value={channelF} onChange={(e) => setChannelF(e.target.value)}>
-              <option value="ALL">All Channels</option>
-              <option value="C2D">C2D only</option>
-              <option value="C2B">C2B only</option>
-            </select>
-          </div>
-          <div>
-            <label style={S.fLabel}>Same Month Cancellation</label>
-            <select style={S.inp} value={smcF} onChange={(e) => setSmcF(e.target.value)}>
-              <option value="ALL">All</option>
-              <option value="YES">SMC Only</option>
-              <option value="NO">Non-SMC Only</option>
-            </select>
-          </div>
-          <div>
-            <label style={S.fLabel}>Auction Stop</label>
-            <select style={S.inp} value={stopF} onChange={(e) => setStopF(e.target.value)}>
-              <option value="ALL">All</option>
-              <option value="NO">Not Stopped</option>
-              <option value="YES">Stopped Only</option>
-            </select>
+      {/* ── Slot count selector ─────────────────────────────────── */}
+      <div style={{ ...S.card, marginBottom: 16 }}>
+        <div style={S.cHead}>🎰 Number of Auction Slots</div>
+        <div style={{ color: "#64748B", fontSize: 13, marginBottom: 12 }}>
+          Each slot runs auctions on its own set of SI buckets. Buckets are exclusive — a bucket can only live in one slot at a time.
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+            <button
+              key={n}
+              onClick={() => setNumSlots(n)}
+              style={{
+                padding: "10px 22px",
+                borderRadius: 10,
+                border: numSlots === n ? "2px solid #3B82F6" : "2px solid #E2E8F0",
+                background: numSlots === n ? "#EFF6FF" : "#FFFFFF",
+                color: numSlots === n ? "#1D4ED8" : "#64748B",
+                fontWeight: 800,
+                fontSize: 15,
+                cursor: "pointer",
+                fontFamily: "inherit",
+                minWidth: 56,
+              }}
+            >
+              {n}
+            </button>
+          ))}
+          <div style={{ marginLeft: "auto", color: "#64748B", fontSize: 13, alignSelf: "center" }}>
+            Active: <b style={{ color: "#0F172A" }}>{activeSlots.join(" · ")}</b>
           </div>
         </div>
       </div>
 
-      <div style={{ ...S.card, marginBottom: 20 }}>
-        <div style={S.cHead}>💵 Anchor Pricing Strategy</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div>
-            <label style={S.fLabel}>Strategy</label>
-            <select style={S.inp} value={anchorStrategy} onChange={(e) => setAnchorStrategy(e.target.value)}>
-              <option value="buying_minus">Buying Price − Fixed Loss</option>
-              <option value="buying_minus_pct">Buying Price − Loss %</option>
-              <option value="fixed">Fixed Anchor Price</option>
-            </select>
-          </div>
-          <div>
-            <label style={S.fLabel}>
-              {anchorStrategy === "buying_minus" && "Loss per car (₹)"}
-              {anchorStrategy === "buying_minus_pct" && "Loss %"}
-              {anchorStrategy === "fixed" && "Fixed anchor (₹)"}
-            </label>
-            <input style={S.inp} value={lossAmount} onChange={(e) => setLossAmount(e.target.value)} placeholder="e.g. 5000" />
-          </div>
-        </div>
-      </div>
-
+      {/* ── Global summary ──────────────────────────────────────── */}
       <div style={S.metrics}>
-        <div style={S.mCard}><div style={{ fontSize: 26, fontWeight: 900, color: "#3B82F6" }}>{stats.n.toLocaleString()}</div><div style={S.mLabel}>Cars Matched</div></div>
-        <div style={S.mCard}><div style={{ fontSize: 26, fontWeight: 900, color: "#F59E0B" }}>{INR(stats.buy)}</div><div style={S.mLabel}>Total Buying</div></div>
-        <div style={S.mCard}><div style={{ fontSize: 26, fontWeight: 900, color: "#8B5CF6" }}>{INR(stats.anchor)}</div><div style={S.mLabel}>Total Anchor</div></div>
-        <div style={S.mCard}><div style={{ fontSize: 26, fontWeight: 900, color: stats.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(stats.pnl)}</div><div style={S.mLabel}>Expected P&L</div></div>
-        <div style={S.mCard}><div style={{ fontSize: 26, fontWeight: 900, color: stats.avg >= 0 ? "#10B981" : "#EF4444" }}>{INR(stats.avg)}</div><div style={S.mLabel}>Avg P&L / Car</div></div>
+        <div style={S.mCard}>
+          <div style={{ fontSize: 26, fontWeight: 900, color: "#3B82F6" }}>{globalStats.cars.toLocaleString()}</div>
+          <div style={S.mLabel}>Cars in Auction</div>
+        </div>
+        <div style={S.mCard}>
+          <div style={{ fontSize: 26, fontWeight: 900, color: "#F59E0B" }}>{INR(globalStats.bp)}</div>
+          <div style={S.mLabel}>Total Buying Value</div>
+        </div>
+        <div style={S.mCard}>
+          <div style={{ fontSize: 26, fontWeight: 900, color: "#8B5CF6" }}>{INR(globalStats.anchor)}</div>
+          <div style={S.mLabel}>Total Anchor Value</div>
+        </div>
+        <div style={S.mCard}>
+          <div style={{ fontSize: 26, fontWeight: 900, color: globalStats.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(globalStats.pnl)}</div>
+          <div style={S.mLabel}>Expected P&L</div>
+        </div>
+        <div style={S.mCard}>
+          <div style={{ fontSize: 26, fontWeight: 900, color: globalStats.avgPnL >= 0 ? "#10B981" : "#EF4444" }}>{INR(globalStats.avgPnL)}</div>
+          <div style={S.mLabel}>Avg P&L / Car</div>
+        </div>
       </div>
 
-      <div style={{ marginTop: 20, display: "flex", gap: 12, alignItems: "center" }}>
-        <button style={{ ...S.pri, background: "#8B5CF6", padding: "14px 32px", fontSize: 15 }} onClick={runAuction} disabled={running || !stats.n}>
-          {running ? "Running…" : `🔨 Run Auction on ${stats.n} cars`}
+      {/* ── Slot Cards ──────────────────────────────────────────── */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 20 }}>
+        {activeSlots.map((slot, idx) => {
+          const color = slotColors[idx % slotColors.length];
+          const st = slotStats[slot];
+          const slotBuckets = slotAssignments[slot] || new Set();
+
+          return (
+            <div key={slot} style={{ ...S.card, borderLeft: `4px solid ${color}`, padding: 0, overflow: "hidden" }}>
+              {/* Slot header */}
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "16px 20px",
+                background: `${color}0D`,
+                borderBottom: "1px solid #E2E8F0",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <div style={{
+                    width: 48, height: 48, borderRadius: 12, background: color, color: "#fff",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 24, fontWeight: 900,
+                  }}>{slot}</div>
+                  <div>
+                    <div style={{ fontSize: 18, fontWeight: 900, color: "#0F172A" }}>Slot {slot}</div>
+                    <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
+                      {slotBuckets.size ? `${[...slotBuckets].join(" · ")}` : "No buckets checked — auction will skip this slot"}
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 28, textAlign: "right" }}>
+                  <div>
+                    <div style={S.slotMetricLabel}>Cars</div>
+                    <div style={{ fontSize: 18, fontWeight: 900, color: "#0F172A" }}>{st.cars.toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div style={S.slotMetricLabel}>Avg BP</div>
+                    <div style={{ fontSize: 18, fontWeight: 900, color: "#F59E0B" }}>{INR(st.avgBP)}</div>
+                  </div>
+                  <div>
+                    <div style={S.slotMetricLabel}>Avg Anchor</div>
+                    <div style={{ fontSize: 18, fontWeight: 900, color }}>{INR(st.avgAnchor)}</div>
+                  </div>
+                  <div>
+                    <div style={S.slotMetricLabel}>Slot P&L</div>
+                    <div style={{ fontSize: 18, fontWeight: 900, color: st.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(st.pnl)}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bucket rows */}
+              <div style={{ padding: "8px 20px 16px" }}>
+                {/* Column headers */}
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "180px 90px 140px 1fr 200px",
+                  gap: 16,
+                  padding: "10px 0 6px",
+                  borderBottom: "1px solid #E2E8F0",
+                }}>
+                  <div style={S.slotMetricLabel}>Bucket</div>
+                  <div style={S.slotMetricLabel}>Cars</div>
+                  <div style={S.slotMetricLabel}>Avg BP</div>
+                  <div style={S.slotMetricLabel}>Avg Anchor (slide to set)</div>
+                  <div style={{ ...S.slotMetricLabel, textAlign: "right" }}>Delta from BP</div>
+                </div>
+
+                {SI_BUCKETS.map((b) => {
+                  const bkt = bucketStats[b];
+                  if (!bkt) return null;
+                  const owner = bucketOwner(b);
+                  const checked = owner === slot;
+                  const ownedElsewhere = owner && owner !== slot;
+                  const disabled = bkt.count === 0;
+                  const avgBP = bkt.avgBP;
+                  // Slider range: 70%–110% of BP
+                  const min = Math.max(1000, Math.round(avgBP * 0.70));
+                  const max = Math.round(avgBP * 1.10);
+                  const anchor = bucketAnchors[b] ?? avgBP;
+                  const deltaAbs = anchor - avgBP;
+                  const deltaPct = avgBP ? (deltaAbs / avgBP) * 100 : 0;
+
+                  return (
+                    <div key={b} style={{
+                      display: "grid",
+                      gridTemplateColumns: "180px 90px 140px 1fr 200px",
+                      gap: 16,
+                      alignItems: "center",
+                      padding: "14px 0",
+                      borderBottom: "1px solid #F1F5F9",
+                      opacity: disabled ? 0.35 : (ownedElsewhere ? 0.45 : 1),
+                    }}>
+                      {/* Checkbox + bucket pill */}
+                      <label style={{
+                        display: "flex", alignItems: "center", gap: 10,
+                        cursor: disabled ? "not-allowed" : "pointer",
+                      }}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={disabled}
+                          onChange={() => toggleBucket(slot, b)}
+                          style={{ width: 18, height: 18, accentColor: color, cursor: disabled ? "not-allowed" : "pointer" }}
+                        />
+                        <span style={{
+                          padding: "5px 14px",
+                          borderRadius: 20,
+                          fontSize: 12,
+                          fontWeight: 800,
+                          background: checked ? `${color}1F` : "#F1F5F9",
+                          color: checked ? color : "#64748B",
+                          border: checked ? `1px solid ${color}55` : "1px solid transparent",
+                        }}>{b}</span>
+                        {ownedElsewhere && (
+                          <span style={{ fontSize: 10, color: "#94A3B8", fontStyle: "italic" }}>in Slot {owner}</span>
+                        )}
+                      </label>
+
+                      {/* Car count */}
+                      <div style={{ fontSize: 16, fontWeight: 800, color: "#0F172A" }}>
+                        {bkt.count.toLocaleString()}
+                      </div>
+
+                      {/* Avg BP box */}
+                      <div style={{
+                        padding: "8px 12px",
+                        background: "#FEF3C7",
+                        borderRadius: 8,
+                        fontSize: 14,
+                        fontWeight: 800,
+                        color: "#92400E",
+                        textAlign: "center",
+                        border: "1px solid #FDE68A",
+                      }}>
+                        {INR(avgBP)}
+                      </div>
+
+                      {/* Anchor slider */}
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#94A3B8", marginBottom: 4 }}>
+                          <span>{INR(min)}</span>
+                          <span style={{ fontWeight: 800, color: "#0F172A", fontSize: 14 }}>{INR(anchor)}</span>
+                          <span>{INR(max)}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={min}
+                          max={max}
+                          step={500}
+                          value={Math.min(max, Math.max(min, anchor))}
+                          disabled={!checked || disabled}
+                          onChange={(e) => setBucketAnchor(b, e.target.value)}
+                          style={{
+                            width: "100%",
+                            accentColor: color,
+                            cursor: (checked && !disabled) ? "pointer" : "not-allowed",
+                          }}
+                        />
+                      </div>
+
+                      {/* Delta from BP */}
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{
+                          display: "inline-block",
+                          padding: "6px 14px",
+                          borderRadius: 8,
+                          background: deltaAbs >= 0 ? "#DCFCE7" : "#FEE2E2",
+                          color: deltaAbs >= 0 ? "#166534" : "#991B1B",
+                          fontWeight: 800,
+                          fontSize: 13,
+                        }}>
+                          {deltaAbs >= 0 ? "▲ +" : "▼ "}{INR(Math.abs(deltaAbs))}
+                          <span style={{ opacity: 0.75, marginLeft: 6, fontSize: 11 }}>
+                            ({deltaPct >= 0 ? "+" : ""}{deltaPct.toFixed(1)}%)
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Run button ──────────────────────────────────────────── */}
+      <div style={{
+        marginTop: 24,
+        display: "flex",
+        gap: 16,
+        alignItems: "center",
+        padding: 20,
+        background: "#FFFFFF",
+        border: "1px solid #E2E8F0",
+        borderRadius: 12,
+        boxShadow: "0 1px 2px rgba(15,23,42,0.03)",
+      }}>
+        <button
+          style={{ ...S.pri, background: "#8B5CF6", padding: "16px 36px", fontSize: 16 }}
+          onClick={runAuction}
+          disabled={running || !globalStats.cars}
+        >
+          {running ? "Running…" : `🔨 Run Auction on ${globalStats.cars.toLocaleString()} cars`}
         </button>
+        <div style={{ color: "#64748B", fontSize: 13 }}>
+          Expected P&L: <b style={{ color: globalStats.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(globalStats.pnl)}</b>
+          {" · "}Avg: <b style={{ color: globalStats.avgPnL >= 0 ? "#10B981" : "#EF4444" }}>{INR(globalStats.avgPnL)}/car</b>
+        </div>
         {lastRun && (
-          <div style={{ color: "#10B981", fontSize: 13 }}>
-            ✅ Last run: {lastRun.count} cars · {INR(lastRun.pnl)} P&L · {lastRun.time}
+          <div style={{ marginLeft: "auto", color: "#10B981", fontSize: 13, fontWeight: 600 }}>
+            ✅ Last run: {lastRun.count.toLocaleString()} cars · {INR(lastRun.pnl)} · {lastRun.time}
           </div>
         )}
-      </div>
-
-      {/* Preview table */}
-      <div style={{ ...S.tWrap, marginTop: 20 }}>
-        <div style={{ padding: "12px 16px", borderBottom: "1px solid #E2E8F0", fontWeight: 700, color: "#0F172A" }}>
-          Preview (first 50 cars)
-        </div>
-        <div style={S.tScroll}>
-          <table style={S.table}>
-            <thead><tr>
-              {["App ID", "Make/Model", "Bucket", "Region", "Buying", "Anchor", "P&L/Car"].map((h) => <th key={h} style={S.th}>{h}</th>)}
-            </tr></thead>
-            <tbody>
-              {filtered.slice(0, 50).map((r, i) => {
-                const anchor = computeAnchor(r);
-                const buy = toNum(r.BUYING_PRICE) || 0;
-                const pnl = anchor - buy;
-                return (
-                  <tr key={i} className="tr">
-                    <td style={{ ...S.td, color: "#3B82F6", fontWeight: 600 }}>{r.LEAD_ID}</td>
-                    <td style={S.td}>{r.MAKE} {r.MODEL}</td>
-                    <td style={S.td}><span style={S.bucketChip}>{r.AGE_BUCKET || "—"}</span></td>
-                    <td style={S.td}>{r.REGION || "—"}</td>
-                    <td style={{ ...S.td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{INR(buy)}</td>
-                    <td style={{ ...S.td, textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>{INR(anchor)}</td>
-                    <td style={{ ...S.td, textAlign: "right", fontVariantNumeric: "tabular-nums", color: pnl >= 0 ? "#10B981" : "#EF4444", fontWeight: 700 }}>{INR(pnl)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
       </div>
     </div>
   );
 }
+
 
 // ═════════════════════════════════════════════════════════════════════
 //  TAB 6 — SETTINGS
@@ -1225,6 +1508,7 @@ const S = {
   modalHead: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "24px 24px 16px", borderBottom: "1px solid #E2E8F0" },
   closeBtn: { background: "#F1F5F9", border: "none", width: 36, height: 36, borderRadius: 8, fontSize: 16, cursor: "pointer", color: "#64748B", fontFamily: "inherit" },
   groupTitle: { fontSize: 12, fontWeight: 800, color: "#3B82F6", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 10, paddingBottom: 6, borderBottom: "2px solid #EFF6FF" },
+  slotMetricLabel: { fontSize: 10, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 4 },
   detailGrid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px 20px" },
   detailItem: { background: "#F8FAFC", padding: "10px 14px", borderRadius: 8, border: "1px solid #F1F5F9" },
   detailLabel: { fontSize: 10, color: "#64748B", textTransform: "uppercase", letterSpacing: ".5px", fontWeight: 600, marginBottom: 4 },
