@@ -888,46 +888,105 @@ function DashboardTab() {
 }
 
 // ═════════════════════════════════════════════════════════════════════
-//  TAB 5 — AUCTION CONSOLE (Slot-based, mirrors Copy_Experiment_Liquidation)
-// ═════════════════════════════════════════════════════════════════════
-//  Mirrors the control pattern of the master Excel sheet:
-//   - Z column filters APPOINTMENT_IDs by SI bucket (regex match on bucket name)
-//   - E column computes Anchor using $D$4 (base multiplier) and $D$2 (drop factor)
-//  Here each slot = one group of SI buckets, and each bucket has its own
-//  anchor slider (average anchor price applied to all cars in that bucket).
+//  TAB 5 — AUCTION CONSOLE
+//  ┌─────────────────────────────────────────────────────────────────┐
+//  │  Sub-tabs:                                                      │
+//  │    (A) SCHEDULED AUCTIONS — time-slot based 9:30 AM → 7:30 PM  │
+//  │    (B) OCB CONSOLE — Open Challenge Bids with nego-aware pricing│
+//  └─────────────────────────────────────────────────────────────────┘
 // ═════════════════════════════════════════════════════════════════════
 const SLOT_NAMES = ["A", "B", "C", "D", "E", "F", "G", "H"];
 const CANONICAL_BUCKETS = ["0-30", "30-60", "60-90", "90-120", "120-150", "150-180", "180+"];
-
 const sortBuckets = (arr) => [...arr].sort((a, b) => {
   const na = parseInt(String(a).match(/\d+/)?.[0] || "0", 10);
   const nb = parseInt(String(b).match(/\d+/)?.[0] || "0", 10);
   return na - nb;
 });
 
-function AuctionTab({ rows, slackUrl, sheetUrl, managerEmail, currentUser }) {
-  const [numSlots, setNumSlots] = useState(3);
-  // slotAssignments: { "A": Set<bucket>, "B": Set<bucket>, ... }
-  const [slotAssignments, setSlotAssignments] = useState({
-    A: new Set(), B: new Set(), C: new Set(),
-  });
-  // bucketAnchors: { "0-30": 250000, ... }  (average anchor per bucket)
-  const [bucketAnchors, setBucketAnchors] = useState({});
-  const [running, setRunning] = useState(false);
-  const [lastRun, setLastRun] = useState(null);
+// Generate 30-min windows from 9:30 to 19:30
+const generateTimeSlots = (numSlots) => {
+  const slots = [];
+  let h = 9, m = 30;
+  while (h < 19 || (h === 19 && m === 0)) {
+    const slotIdx = slots.length % numSlots;
+    const slotLetter = SLOT_NAMES[slotIdx];
+    const startStr = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+    let eh = h, em = m + 30;
+    if (em >= 60) { eh += 1; em -= 60; }
+    const endStr = `${String(eh).padStart(2, "0")}:${String(em).padStart(2, "0")}`;
+    slots.push({ slot: slotLetter, start: startStr, end: endStr, index: slots.length });
+    h = eh; m = em;
+  }
+  return slots;
+};
 
-  // ── 1. Discover SI buckets from the uploaded inventory ───────────
+// Which time-slot is active RIGHT NOW?
+const getCurrentTimeSlot = (schedule) => {
+  const now = new Date();
+  const mins = now.getHours() * 60 + now.getMinutes();
+  for (const ts of schedule) {
+    const [sh, sm] = ts.start.split(":").map(Number);
+    const [eh, em] = ts.end.split(":").map(Number);
+    const s = sh * 60 + sm, e = eh * 60 + em;
+    if (mins >= s && mins < e) return ts;
+  }
+  return null;
+};
+
+function AuctionTab({ rows, slackUrl, sheetUrl, managerEmail, currentUser }) {
+  const [subTab, setSubTab] = useState("scheduled"); // "scheduled" | "ocb"
+
+  return (
+    <div>
+      {/* Sub-tab toggle */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        <button style={subTab === "scheduled" ? S.navActive : S.navBtn} onClick={() => setSubTab("scheduled")}>
+          <span style={{ marginRight: 6 }}>⏱️</span>Scheduled Auctions
+        </button>
+        <button style={subTab === "ocb" ? S.navActive : S.navBtn} onClick={() => setSubTab("ocb")}>
+          <span style={{ marginRight: 6 }}>🎯</span>OCB Console
+        </button>
+      </div>
+
+      {subTab === "scheduled" && (
+        <ScheduledAuctions rows={rows} slackUrl={slackUrl} sheetUrl={sheetUrl} managerEmail={managerEmail} currentUser={currentUser} />
+      )}
+      {subTab === "ocb" && (
+        <OCBConsole rows={rows} slackUrl={slackUrl} sheetUrl={sheetUrl} managerEmail={managerEmail} currentUser={currentUser} />
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+//  (A) SCHEDULED AUCTIONS — time-slot based
+// ─────────────────────────────────────────────────────────────────────
+function ScheduledAuctions({ rows, slackUrl, sheetUrl, managerEmail, currentUser }) {
+  const [numSlots, setNumSlots] = useState(3);
+  const [slotAssignments, setSlotAssignments] = useState({});
+  const [bucketAnchors, setBucketAnchors] = useState({});
+  const [scheduleActive, setScheduleActive] = useState(false);
+  const [lastFired, setLastFired] = useState(null);
+  const [firedSlots, setFiredSlots] = useState(new Set());
+  const [now, setNow] = useState(new Date());
+
+  // Live clock
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 10000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Discover SI buckets
   const SI_BUCKETS = useMemo(() => {
     const found = new Set();
     for (const r of rows) {
       const b = String(r.AGE_BUCKET || "").trim();
       if (b) found.add(b);
     }
-    // If nothing found (column missing), fall back to canonical list
     return found.size ? sortBuckets([...found]) : CANONICAL_BUCKETS;
   }, [rows]);
 
-  // ── 2. Aggregate cars by bucket ──────────────────────────────────
+  // Bucket stats
   const bucketStats = useMemo(() => {
     const map = {};
     for (const b of SI_BUCKETS) map[b] = { bucket: b, count: 0, totalBP: 0, cars: [] };
@@ -945,7 +1004,7 @@ function AuctionTab({ rows, slackUrl, sheetUrl, managerEmail, currentUser }) {
     return map;
   }, [rows, SI_BUCKETS]);
 
-  // ── 3. Initialize default anchor per bucket (95% of avg BP) ──────
+  // Default anchors
   useEffect(() => {
     setBucketAnchors((prev) => {
       const next = { ...prev };
@@ -958,281 +1017,261 @@ function AuctionTab({ rows, slackUrl, sheetUrl, managerEmail, currentUser }) {
     });
   }, [bucketStats, SI_BUCKETS]);
 
-  // ── 4. Auto-distribute buckets across slots when slot count changes ──
+  // Auto-distribute on first load
   useEffect(() => {
     setSlotAssignments((prev) => {
-      // Only auto-seed if all current slots are empty (first load / reset)
       const activeNow = SLOT_NAMES.slice(0, numSlots);
-      const existingSlots = Object.keys(prev);
-      const anyAssigned = existingSlots.some((s) => prev[s] && prev[s].size > 0);
-
+      const anyAssigned = Object.values(prev).some((s) => s && s.size > 0);
       const next = {};
       for (const s of activeNow) next[s] = prev[s] ? new Set(prev[s]) : new Set();
-
       if (!anyAssigned && SI_BUCKETS.length) {
-        // Distribute buckets round-robin across slots
         SI_BUCKETS.forEach((b, i) => {
-          if (bucketStats[b]?.count > 0) {
-            const slot = activeNow[i % activeNow.length];
-            next[slot].add(b);
-          }
+          if (bucketStats[b]?.count > 0) next[activeNow[i % activeNow.length]].add(b);
         });
       }
       return next;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [numSlots, SI_BUCKETS.length]);
 
   const activeSlots = SLOT_NAMES.slice(0, numSlots);
 
-  // ── 5. Helpers ───────────────────────────────────────────────────
-  // Which slot currently owns a given bucket? (buckets are exclusive across slots)
+  // Time schedule
+  const schedule = useMemo(() => generateTimeSlots(numSlots), [numSlots]);
+  const currentTS = useMemo(() => getCurrentTimeSlot(schedule), [schedule, now]);
+
+  // Slot helpers
   const bucketOwner = (bucket) => {
-    for (const s of activeSlots) {
-      if (slotAssignments[s]?.has(bucket)) return s;
-    }
+    for (const s of activeSlots) if (slotAssignments[s]?.has(bucket)) return s;
     return null;
   };
-
-  // Toggle a bucket in a slot. If already in another slot, move it here.
   const toggleBucket = (slot, bucket) => {
     setSlotAssignments((prev) => {
       const next = {};
       for (const s of activeSlots) next[s] = new Set(prev[s] || []);
       const owner = activeSlots.find((s) => next[s].has(bucket));
-      if (owner === slot) {
-        next[slot].delete(bucket); // uncheck → remove from auction
-      } else {
-        if (owner) next[owner].delete(bucket); // move from old slot
-        next[slot].add(bucket);
-      }
+      if (owner === slot) next[slot].delete(bucket);
+      else { if (owner) next[owner].delete(bucket); next[slot].add(bucket); }
       return next;
     });
   };
+  const setBucketAnchor = (bucket, val) => setBucketAnchors((prev) => ({ ...prev, [bucket]: Number(val) }));
 
-  const setBucketAnchor = (bucket, val) => {
-    setBucketAnchors((prev) => ({ ...prev, [bucket]: Number(val) }));
-  };
-
-  // ── 6. Per-slot aggregated stats ─────────────────────────────────
+  // Per-slot stats
   const slotStats = useMemo(() => {
     const out = {};
     for (const s of activeSlots) {
       const bs = [...(slotAssignments[s] || [])];
       let cars = 0, totalBP = 0, totalAnchor = 0;
       for (const b of bs) {
-        const bkt = bucketStats[b];
-        if (!bkt) continue;
-        cars += bkt.count;
-        totalBP += bkt.totalBP;
-        const a = bucketAnchors[b] ?? bkt.avgBP;
-        totalAnchor += a * bkt.count;
+        const bkt = bucketStats[b]; if (!bkt) continue;
+        cars += bkt.count; totalBP += bkt.totalBP;
+        totalAnchor += (bucketAnchors[b] ?? bkt.avgBP) * bkt.count;
       }
-      out[s] = {
-        cars, totalBP, totalAnchor,
-        avgBP: cars ? Math.round(totalBP / cars) : 0,
-        avgAnchor: cars ? Math.round(totalAnchor / cars) : 0,
-        pnl: totalAnchor - totalBP,
-      };
+      out[s] = { cars, totalBP, totalAnchor, avgBP: cars ? Math.round(totalBP / cars) : 0, avgAnchor: cars ? Math.round(totalAnchor / cars) : 0, pnl: totalAnchor - totalBP };
     }
     return out;
   }, [activeSlots, slotAssignments, bucketStats, bucketAnchors]);
 
-  // ── 7. Global total across all slots ─────────────────────────────
   const globalStats = useMemo(() => {
     let cars = 0, bp = 0, anchor = 0;
-    Object.values(slotStats).forEach((s) => {
-      cars += s.cars; bp += s.totalBP; anchor += s.totalAnchor;
-    });
+    Object.values(slotStats).forEach((s) => { cars += s.cars; bp += s.totalBP; anchor += s.totalAnchor; });
     return { cars, bp, anchor, pnl: anchor - bp, avgPnL: cars ? (anchor - bp) / cars : 0 };
   }, [slotStats]);
 
-  // ── 8. Run auction: log every car to sheet, tagged with slot + bucket ──
-  const runAuction = async () => {
-    if (!globalStats.cars) { alert("No buckets selected. Check at least one bucket in any slot."); return; }
-    if (!currentUser) { alert("Please enter your name in the header first."); return; }
-    if (!confirm(`Run auction on ${globalStats.cars.toLocaleString()} cars across ${activeSlots.length} slot(s)?\nExpected P&L: ${INR(globalStats.pnl)}`)) return;
-    setRunning(true);
+  // Auto-fire: when schedule is active, fire the current slot every 30 min
+  useEffect(() => {
+    if (!scheduleActive || !currentTS) return;
+    const key = `${currentTS.start}_${currentTS.slot}`;
+    if (firedSlots.has(key)) return;
+    // Fire this slot
+    const slot = currentTS.slot;
+    const buckets = [...(slotAssignments[slot] || [])];
+    if (!buckets.length) return;
 
-    let sent = 0;
-    for (const slot of activeSlots) {
-      const buckets = [...(slotAssignments[slot] || [])];
+    (async () => {
+      let sent = 0;
       for (const b of buckets) {
-        const anchor = bucketAnchors[b] ?? bucketStats[b].avgBP;
-        for (const car of bucketStats[b].cars) {
+        const anchor = bucketAnchors[b] ?? bucketStats[b]?.avgBP ?? 0;
+        for (const car of (bucketStats[b]?.cars || [])) {
           await appendToSheet(sheetUrl, {
             timestamp: new Date().toISOString(),
             appointmentId: car.LEAD_ID,
             region: car.REGION || "",
             anchorPrice: anchor,
-            auctionStartFor: `SLOT_${slot}_${b}`,
-            submittedBy: currentUser,
+            auctionStartFor: `SLOT_${slot}_${b}_${currentTS.start}`,
+            submittedBy: currentUser || "Auto",
             email: managerEmail || "",
             date: new Date().toLocaleDateString("en-IN"),
           });
           sent++;
         }
       }
-    }
-
-    if (slackUrl) {
-      const summary = activeSlots
-        .filter((s) => slotStats[s].cars > 0)
-        .map((s) => {
-          const bs = [...(slotAssignments[s] || [])];
-          return `• Slot ${s}: ${bs.join(", ")} → ${slotStats[s].cars} cars @ avg anchor ₹${slotStats[s].avgAnchor.toLocaleString("en-IN")}`;
-        })
-        .join("\n");
-      await sendSlackMessage(slackUrl,
-        `:hammer: *BULK AUCTION STARTED*\n*Total:* ${sent} cars | *Expected P&L:* ₹${globalStats.pnl.toLocaleString("en-IN")}\n\n${summary}\n\n*By:* ${currentUser}`
-      );
-    }
-
-    setLastRun({ count: sent, pnl: globalStats.pnl, time: new Date().toLocaleString("en-IN") });
-    setRunning(false);
-  };
+      if (slackUrl) {
+        await sendSlackMessage(slackUrl,
+          `:clock3: *AUTO AUCTION — Slot ${slot}* (${currentTS.start}–${currentTS.end})\n*Cars:* ${sent} | *Buckets:* ${buckets.join(", ")}\n*By:* ${currentUser || "Auto-scheduler"}`
+        );
+      }
+      setFiredSlots((prev) => new Set([...prev, key]));
+      setLastFired({ slot, time: currentTS.start, count: sent, ts: new Date().toLocaleString("en-IN") });
+    })();
+  }, [scheduleActive, currentTS, firedSlots, slotAssignments, bucketAnchors, bucketStats, sheetUrl, slackUrl, managerEmail, currentUser]);
 
   const slotColors = ["#3B82F6", "#8B5CF6", "#10B981", "#F59E0B", "#EC4899", "#06B6D4", "#EF4444", "#84CC16"];
 
-  // ═════════════════════════════════════════════════════════════════
-  //  RENDER
-  // ═════════════════════════════════════════════════════════════════
   return (
     <div>
+      {/* ── Schedule ON/OFF + Live clock ────────────────────────── */}
+      <div style={{ ...S.card, marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <button
+            onClick={() => { setScheduleActive(!scheduleActive); if (!scheduleActive) setFiredSlots(new Set()); }}
+            style={{
+              ...S.pri,
+              padding: "14px 32px",
+              fontSize: 16,
+              background: scheduleActive ? "#EF4444" : "#10B981",
+            }}
+          >
+            {scheduleActive ? "⏸️ Stop Schedule" : "▶️ Start Auto-Auction Schedule"}
+          </button>
+          <div>
+            <div style={{ fontSize: 13, color: "#64748B" }}>Status</div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: scheduleActive ? "#10B981" : "#64748B" }}>
+              {scheduleActive ? "🟢 LIVE — Auto-firing every 30 min" : "⏹️ Stopped"}
+            </div>
+          </div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontSize: 12, color: "#64748B" }}>Current Time</div>
+          <div style={{ fontSize: 22, fontWeight: 900, color: "#0F172A", fontVariantNumeric: "tabular-nums" }}>
+            {now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}
+          </div>
+          {currentTS && (
+            <div style={{ fontSize: 12, color: slotColors[activeSlots.indexOf(currentTS.slot)] || "#3B82F6", fontWeight: 700, marginTop: 2 }}>
+              Active Window: Slot {currentTS.slot} ({currentTS.start}–{currentTS.end})
+            </div>
+          )}
+          {!currentTS && scheduleActive && (
+            <div style={{ fontSize: 12, color: "#F59E0B", marginTop: 2 }}>Outside auction hours (9:30 AM–7:30 PM)</div>
+          )}
+        </div>
+      </div>
+
       {/* ── Slot count selector ─────────────────────────────────── */}
       <div style={{ ...S.card, marginBottom: 16 }}>
         <div style={S.cHead}>🎰 Number of Auction Slots</div>
         <div style={{ color: "#64748B", fontSize: 13, marginBottom: 12 }}>
-          Each slot runs auctions on its own set of SI buckets. Buckets are exclusive — a bucket can only live in one slot at a time.
+          Slots rotate every 30 min: A → B → C → A → B → C … from 9:30 AM to 7:30 PM ({Math.floor(20 / numSlots)} full cycles/day)
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
-            <button
-              key={n}
-              onClick={() => setNumSlots(n)}
-              style={{
-                padding: "10px 22px",
-                borderRadius: 10,
-                border: numSlots === n ? "2px solid #3B82F6" : "2px solid #E2E8F0",
-                background: numSlots === n ? "#EFF6FF" : "#FFFFFF",
-                color: numSlots === n ? "#1D4ED8" : "#64748B",
-                fontWeight: 800,
-                fontSize: 15,
-                cursor: "pointer",
-                fontFamily: "inherit",
-                minWidth: 56,
-              }}
-            >
+          {[1, 2, 3, 4, 5, 6].map((n) => (
+            <button key={n} onClick={() => setNumSlots(n)} style={{ padding: "10px 22px", borderRadius: 10, border: numSlots === n ? "2px solid #3B82F6" : "2px solid #E2E8F0", background: numSlots === n ? "#EFF6FF" : "#FFF", color: numSlots === n ? "#1D4ED8" : "#64748B", fontWeight: 800, fontSize: 15, cursor: "pointer", fontFamily: "inherit", minWidth: 56 }}>
               {n}
             </button>
           ))}
-          <div style={{ marginLeft: "auto", color: "#64748B", fontSize: 13, alignSelf: "center" }}>
-            Active: <b style={{ color: "#0F172A" }}>{activeSlots.join(" · ")}</b>
-          </div>
         </div>
+      </div>
+
+      {/* ── Time Schedule Visual ─────────────────────────────────── */}
+      <div style={{ ...S.card, marginBottom: 16 }}>
+        <div style={S.cHead}>📅 Today's Auction Timeline</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+          {schedule.map((ts, i) => {
+            const color = slotColors[activeSlots.indexOf(ts.slot)] || "#94A3B8";
+            const isCurrent = currentTS && ts.start === currentTS.start;
+            const isFired = firedSlots.has(`${ts.start}_${ts.slot}`);
+            return (
+              <div key={i} style={{
+                padding: "8px 10px",
+                borderRadius: 8,
+                fontSize: 11,
+                fontWeight: 700,
+                textAlign: "center",
+                minWidth: 70,
+                border: isCurrent ? `2px solid ${color}` : "1px solid #E2E8F0",
+                background: isCurrent ? `${color}1A` : (isFired ? "#ECFDF5" : "#FFF"),
+                color: isCurrent ? color : (isFired ? "#10B981" : "#64748B"),
+                position: "relative",
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 900, color: isCurrent ? color : "#0F172A" }}>
+                  {ts.slot}
+                </div>
+                <div>{ts.start}</div>
+                {isFired && <span style={{ fontSize: 9 }}>✓ done</span>}
+                {isCurrent && scheduleActive && <span style={{ fontSize: 9, color }}>● LIVE</span>}
+              </div>
+            );
+          })}
+        </div>
+        {lastFired && (
+          <div style={{ marginTop: 12, fontSize: 13, color: "#10B981", fontWeight: 600 }}>
+            ✅ Last fired: Slot {lastFired.slot} at {lastFired.time} — {lastFired.count} cars — {lastFired.ts}
+          </div>
+        )}
       </div>
 
       {/* ── Global summary ──────────────────────────────────────── */}
       <div style={S.metrics}>
-        <div style={S.mCard}>
-          <div style={{ fontSize: 26, fontWeight: 900, color: "#3B82F6" }}>{globalStats.cars.toLocaleString()}</div>
-          <div style={S.mLabel}>Cars in Auction</div>
-        </div>
-        <div style={S.mCard}>
-          <div style={{ fontSize: 26, fontWeight: 900, color: "#F59E0B" }}>{INR(globalStats.bp)}</div>
-          <div style={S.mLabel}>Total Buying Value</div>
-        </div>
-        <div style={S.mCard}>
-          <div style={{ fontSize: 26, fontWeight: 900, color: "#8B5CF6" }}>{INR(globalStats.anchor)}</div>
-          <div style={S.mLabel}>Total Anchor Value</div>
-        </div>
-        <div style={S.mCard}>
-          <div style={{ fontSize: 26, fontWeight: 900, color: globalStats.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(globalStats.pnl)}</div>
-          <div style={S.mLabel}>Expected P&L</div>
-        </div>
-        <div style={S.mCard}>
-          <div style={{ fontSize: 26, fontWeight: 900, color: globalStats.avgPnL >= 0 ? "#10B981" : "#EF4444" }}>{INR(globalStats.avgPnL)}</div>
-          <div style={S.mLabel}>Avg P&L / Car</div>
-        </div>
+        <div style={S.mCard}><div style={{ fontSize: 26, fontWeight: 900, color: "#3B82F6" }}>{globalStats.cars.toLocaleString()}</div><div style={S.mLabel}>Cars in Auction</div></div>
+        <div style={S.mCard}><div style={{ fontSize: 26, fontWeight: 900, color: "#F59E0B" }}>{INR(globalStats.bp)}</div><div style={S.mLabel}>Total Buying Value</div></div>
+        <div style={S.mCard}><div style={{ fontSize: 26, fontWeight: 900, color: "#8B5CF6" }}>{INR(globalStats.anchor)}</div><div style={S.mLabel}>Total Anchor Value</div></div>
+        <div style={S.mCard}><div style={{ fontSize: 26, fontWeight: 900, color: globalStats.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(globalStats.pnl)}</div><div style={S.mLabel}>Expected P&L</div></div>
+        <div style={S.mCard}><div style={{ fontSize: 26, fontWeight: 900, color: globalStats.avgPnL >= 0 ? "#10B981" : "#EF4444" }}>{INR(globalStats.avgPnL)}</div><div style={S.mLabel}>Avg P&L / Car</div></div>
       </div>
 
-      {/* ── Slot Cards ──────────────────────────────────────────── */}
+      {/* ── Slot Cards (same bucket picker as before) ────────────── */}
       <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 20 }}>
         {activeSlots.map((slot, idx) => {
           const color = slotColors[idx % slotColors.length];
           const st = slotStats[slot];
           const slotBuckets = slotAssignments[slot] || new Set();
+          // How many windows this slot gets today
+          const windowCount = schedule.filter((ts) => ts.slot === slot).length;
+          const nextWindow = schedule.find((ts) => {
+            const [sh, sm] = ts.start.split(":").map(Number);
+            const smins = sh * 60 + sm;
+            const nowMins = now.getHours() * 60 + now.getMinutes();
+            return ts.slot === slot && smins > nowMins;
+          });
 
           return (
             <div key={slot} style={{ ...S.card, borderLeft: `4px solid ${color}`, padding: 0, overflow: "hidden" }}>
-              {/* Slot header */}
-              <div style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: "16px 20px",
-                background: `${color}0D`,
-                borderBottom: "1px solid #E2E8F0",
-              }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", background: `${color}0D`, borderBottom: "1px solid #E2E8F0" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                  <div style={{
-                    width: 48, height: 48, borderRadius: 12, background: color, color: "#fff",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 24, fontWeight: 900,
-                  }}>{slot}</div>
+                  <div style={{ width: 48, height: 48, borderRadius: 12, background: color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 900 }}>{slot}</div>
                   <div>
                     <div style={{ fontSize: 18, fontWeight: 900, color: "#0F172A" }}>Slot {slot}</div>
                     <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
-                      {slotBuckets.size ? `${[...slotBuckets].join(" · ")}` : "No buckets checked — auction will skip this slot"}
+                      {slotBuckets.size ? [...slotBuckets].join(" · ") : "No buckets selected"} · {windowCount} windows today
+                      {nextWindow && <span style={{ color }}> · Next: {nextWindow.start}</span>}
                     </div>
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 28, textAlign: "right" }}>
-                  <div>
-                    <div style={S.slotMetricLabel}>Cars</div>
-                    <div style={{ fontSize: 18, fontWeight: 900, color: "#0F172A" }}>{st.cars.toLocaleString()}</div>
-                  </div>
-                  <div>
-                    <div style={S.slotMetricLabel}>Avg BP</div>
-                    <div style={{ fontSize: 18, fontWeight: 900, color: "#F59E0B" }}>{INR(st.avgBP)}</div>
-                  </div>
-                  <div>
-                    <div style={S.slotMetricLabel}>Avg Anchor</div>
-                    <div style={{ fontSize: 18, fontWeight: 900, color }}>{INR(st.avgAnchor)}</div>
-                  </div>
-                  <div>
-                    <div style={S.slotMetricLabel}>Slot P&L</div>
-                    <div style={{ fontSize: 18, fontWeight: 900, color: st.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(st.pnl)}</div>
-                  </div>
+                <div style={{ display: "flex", gap: 24, textAlign: "right" }}>
+                  <div><div style={S.slotMetricLabel}>Cars</div><div style={{ fontSize: 18, fontWeight: 900, color: "#0F172A" }}>{st.cars.toLocaleString()}</div></div>
+                  <div><div style={S.slotMetricLabel}>Avg BP</div><div style={{ fontSize: 18, fontWeight: 900, color: "#F59E0B" }}>{INR(st.avgBP)}</div></div>
+                  <div><div style={S.slotMetricLabel}>Avg Anchor</div><div style={{ fontSize: 18, fontWeight: 900, color }}>{INR(st.avgAnchor)}</div></div>
+                  <div><div style={S.slotMetricLabel}>Slot P&L</div><div style={{ fontSize: 18, fontWeight: 900, color: st.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(st.pnl)}</div></div>
                 </div>
               </div>
 
               {/* Bucket rows */}
               <div style={{ padding: "8px 20px 16px" }}>
-                {/* Column headers */}
-                <div style={{
-                  display: "grid",
-                  gridTemplateColumns: "180px 90px 140px 1fr 200px",
-                  gap: 16,
-                  padding: "10px 0 6px",
-                  borderBottom: "1px solid #E2E8F0",
-                }}>
+                <div style={{ display: "grid", gridTemplateColumns: "180px 90px 140px 1fr 200px", gap: 16, padding: "10px 0 6px", borderBottom: "1px solid #E2E8F0" }}>
                   <div style={S.slotMetricLabel}>Bucket</div>
                   <div style={S.slotMetricLabel}>Cars</div>
                   <div style={S.slotMetricLabel}>Avg BP</div>
-                  <div style={S.slotMetricLabel}>Avg Anchor (slide to set)</div>
+                  <div style={S.slotMetricLabel}>Avg Anchor (slide)</div>
                   <div style={{ ...S.slotMetricLabel, textAlign: "right" }}>Delta from BP</div>
                 </div>
 
                 {SI_BUCKETS.map((b) => {
-                  const bkt = bucketStats[b];
-                  if (!bkt) return null;
+                  const bkt = bucketStats[b]; if (!bkt) return null;
                   const owner = bucketOwner(b);
                   const checked = owner === slot;
                   const ownedElsewhere = owner && owner !== slot;
                   const disabled = bkt.count === 0;
                   const avgBP = bkt.avgBP;
-                  // Slider range: 70%–110% of BP
                   const min = Math.max(1000, Math.round(avgBP * 0.70));
                   const max = Math.round(avgBP * 1.10);
                   const anchor = bucketAnchors[b] ?? avgBP;
@@ -1240,98 +1279,26 @@ function AuctionTab({ rows, slackUrl, sheetUrl, managerEmail, currentUser }) {
                   const deltaPct = avgBP ? (deltaAbs / avgBP) * 100 : 0;
 
                   return (
-                    <div key={b} style={{
-                      display: "grid",
-                      gridTemplateColumns: "180px 90px 140px 1fr 200px",
-                      gap: 16,
-                      alignItems: "center",
-                      padding: "14px 0",
-                      borderBottom: "1px solid #F1F5F9",
-                      opacity: disabled ? 0.35 : (ownedElsewhere ? 0.45 : 1),
-                    }}>
-                      {/* Checkbox + bucket pill */}
-                      <label style={{
-                        display: "flex", alignItems: "center", gap: 10,
-                        cursor: disabled ? "not-allowed" : "pointer",
-                      }}>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={disabled}
-                          onChange={() => toggleBucket(slot, b)}
-                          style={{ width: 18, height: 18, accentColor: color, cursor: disabled ? "not-allowed" : "pointer" }}
-                        />
-                        <span style={{
-                          padding: "5px 14px",
-                          borderRadius: 20,
-                          fontSize: 12,
-                          fontWeight: 800,
-                          background: checked ? `${color}1F` : "#F1F5F9",
-                          color: checked ? color : "#64748B",
-                          border: checked ? `1px solid ${color}55` : "1px solid transparent",
-                        }}>{b}</span>
-                        {ownedElsewhere && (
-                          <span style={{ fontSize: 10, color: "#94A3B8", fontStyle: "italic" }}>in Slot {owner}</span>
-                        )}
+                    <div key={b} style={{ display: "grid", gridTemplateColumns: "180px 90px 140px 1fr 200px", gap: 16, alignItems: "center", padding: "14px 0", borderBottom: "1px solid #F1F5F9", opacity: disabled ? 0.35 : (ownedElsewhere ? 0.45 : 1) }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: disabled ? "not-allowed" : "pointer" }}>
+                        <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggleBucket(slot, b)} style={{ width: 18, height: 18, accentColor: color, cursor: disabled ? "not-allowed" : "pointer" }} />
+                        <span style={{ padding: "5px 14px", borderRadius: 20, fontSize: 12, fontWeight: 800, background: checked ? `${color}1F` : "#F1F5F9", color: checked ? color : "#64748B", border: checked ? `1px solid ${color}55` : "1px solid transparent" }}>{b}</span>
+                        {ownedElsewhere && <span style={{ fontSize: 10, color: "#94A3B8", fontStyle: "italic" }}>in {owner}</span>}
                       </label>
-
-                      {/* Car count */}
-                      <div style={{ fontSize: 16, fontWeight: 800, color: "#0F172A" }}>
-                        {bkt.count.toLocaleString()}
-                      </div>
-
-                      {/* Avg BP box */}
-                      <div style={{
-                        padding: "8px 12px",
-                        background: "#FEF3C7",
-                        borderRadius: 8,
-                        fontSize: 14,
-                        fontWeight: 800,
-                        color: "#92400E",
-                        textAlign: "center",
-                        border: "1px solid #FDE68A",
-                      }}>
-                        {INR(avgBP)}
-                      </div>
-
-                      {/* Anchor slider */}
+                      <div style={{ fontSize: 16, fontWeight: 800, color: "#0F172A" }}>{bkt.count.toLocaleString()}</div>
+                      <div style={{ padding: "8px 12px", background: "#FEF3C7", borderRadius: 8, fontSize: 14, fontWeight: 800, color: "#92400E", textAlign: "center", border: "1px solid #FDE68A" }}>{INR(avgBP)}</div>
                       <div>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#94A3B8", marginBottom: 4 }}>
                           <span>{INR(min)}</span>
                           <span style={{ fontWeight: 800, color: "#0F172A", fontSize: 14 }}>{INR(anchor)}</span>
                           <span>{INR(max)}</span>
                         </div>
-                        <input
-                          type="range"
-                          min={min}
-                          max={max}
-                          step={500}
-                          value={Math.min(max, Math.max(min, anchor))}
-                          disabled={!checked || disabled}
-                          onChange={(e) => setBucketAnchor(b, e.target.value)}
-                          style={{
-                            width: "100%",
-                            accentColor: color,
-                            cursor: (checked && !disabled) ? "pointer" : "not-allowed",
-                          }}
-                        />
+                        <input type="range" min={min} max={max} step={500} value={Math.min(max, Math.max(min, anchor))} disabled={!checked || disabled} onChange={(e) => setBucketAnchor(b, e.target.value)} style={{ width: "100%", accentColor: color, cursor: (checked && !disabled) ? "pointer" : "not-allowed" }} />
                       </div>
-
-                      {/* Delta from BP */}
                       <div style={{ textAlign: "right" }}>
-                        <div style={{
-                          display: "inline-block",
-                          padding: "6px 14px",
-                          borderRadius: 8,
-                          background: deltaAbs >= 0 ? "#DCFCE7" : "#FEE2E2",
-                          color: deltaAbs >= 0 ? "#166534" : "#991B1B",
-                          fontWeight: 800,
-                          fontSize: 13,
-                        }}>
+                        <div style={{ display: "inline-block", padding: "6px 14px", borderRadius: 8, background: deltaAbs >= 0 ? "#DCFCE7" : "#FEE2E2", color: deltaAbs >= 0 ? "#166534" : "#991B1B", fontWeight: 800, fontSize: 13 }}>
                           {deltaAbs >= 0 ? "▲ +" : "▼ "}{INR(Math.abs(deltaAbs))}
-                          <span style={{ opacity: 0.75, marginLeft: 6, fontSize: 11 }}>
-                            ({deltaPct >= 0 ? "+" : ""}{deltaPct.toFixed(1)}%)
-                          </span>
+                          <span style={{ opacity: 0.75, marginLeft: 6, fontSize: 11 }}>({deltaPct >= 0 ? "+" : ""}{deltaPct.toFixed(1)}%)</span>
                         </div>
                       </div>
                     </div>
@@ -1342,39 +1309,316 @@ function AuctionTab({ rows, slackUrl, sheetUrl, managerEmail, currentUser }) {
           );
         })}
       </div>
+    </div>
+  );
+}
 
-      {/* ── Run button ──────────────────────────────────────────── */}
-      <div style={{
-        marginTop: 24,
-        display: "flex",
-        gap: 16,
-        alignItems: "center",
-        padding: 20,
-        background: "#FFFFFF",
-        border: "1px solid #E2E8F0",
-        borderRadius: 12,
-        boxShadow: "0 1px 2px rgba(15,23,42,0.03)",
-      }}>
-        <button
-          style={{ ...S.pri, background: "#8B5CF6", padding: "16px 36px", fontSize: 16 }}
-          onClick={runAuction}
-          disabled={running || !globalStats.cars}
-        >
-          {running ? "Running…" : `🔨 Run Auction on ${globalStats.cars.toLocaleString()} cars`}
+// ─────────────────────────────────────────────────────────────────────
+//  (B) OCB CONSOLE — Open Challenge Bids
+//      Price logic: dealer can nego down by 10%, so if you run OCB at
+//      price X, dealer actually bids ~X*0.90. So to not exceed your max
+//      loss budget, OCB price must be ≥ BP − maxLoss + 10% buffer.
+//      Formula: OCB Price = (BP − maxLoss) / 0.90
+// ─────────────────────────────────────────────────────────────────────
+function OCBConsole({ rows, slackUrl, sheetUrl, managerEmail, currentUser }) {
+  const [search, setSearch] = useState("");
+  const [bucketF, setBucketF] = useState("ALL");
+  const [regionF, setRegionF] = useState("ALL");
+  const [selectedCars, setSelectedCars] = useState(new Map()); // LEAD_ID → { ocbPrice, maxLoss, duration }
+  const [globalMaxLoss, setGlobalMaxLoss] = useState(10000);
+  const [globalDuration, setGlobalDuration] = useState(60);
+  const [negoPercent, setNegoPercent] = useState(10);
+  const [running, setRunning] = useState(false);
+  const [lastRun, setLastRun] = useState(null);
+  const [page, setPage] = useState(0);
+  const PG = 50;
+
+  const buckets = useMemo(() => ["ALL", ...new Set(rows.map((r) => String(r.AGE_BUCKET || "").trim()).filter(Boolean))], [rows]);
+  const regions = useMemo(() => ["ALL", ...new Set(rows.map((r) => r.REGION).filter(Boolean))].sort(), [rows]);
+
+  const filtered = useMemo(() => {
+    let f = rows;
+    if (bucketF !== "ALL") f = f.filter((r) => String(r.AGE_BUCKET || "").trim() === bucketF);
+    if (regionF !== "ALL") f = f.filter((r) => r.REGION === regionF);
+    if (search) {
+      const s = search.toLowerCase();
+      f = f.filter((r) => String(r.LEAD_ID || "").toLowerCase().includes(s) || String(r.MAKE || "").toLowerCase().includes(s) || String(r.MODEL || "").toLowerCase().includes(s));
+    }
+    return f;
+  }, [rows, bucketF, regionF, search]);
+
+  const pg = filtered.slice(page * PG, (page + 1) * PG);
+  const tp = Math.ceil(filtered.length / PG);
+
+  // Compute OCB price: ensure dealer's 10%-down bid still covers BP − maxLoss
+  // Dealer bids = OCB * (1 - negoPercent/100)
+  // We need: OCB * (1 - nego%) >= BP - maxLoss
+  // So: OCB >= (BP - maxLoss) / (1 - nego%)
+  const computeOCBPrice = (bp, maxLoss, negoPct) => {
+    const minAfterNego = bp - maxLoss;
+    return Math.ceil(minAfterNego / (1 - negoPct / 100) / 100) * 100; // Round up to nearest 100
+  };
+
+  const toggleCar = (car) => {
+    const id = car.LEAD_ID;
+    setSelectedCars((prev) => {
+      const next = new Map(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        const bp = toNum(car.BUYING_PRICE) || 0;
+        const ocbPrice = computeOCBPrice(bp, globalMaxLoss, negoPercent);
+        next.set(id, { car, ocbPrice, maxLoss: globalMaxLoss, duration: globalDuration, bp });
+      }
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    setSelectedCars((prev) => {
+      const next = new Map(prev);
+      for (const car of filtered) {
+        const id = car.LEAD_ID;
+        if (!next.has(id)) {
+          const bp = toNum(car.BUYING_PRICE) || 0;
+          next.set(id, { car, ocbPrice: computeOCBPrice(bp, globalMaxLoss, negoPercent), maxLoss: globalMaxLoss, duration: globalDuration, bp });
+        }
+      }
+      return next;
+    });
+  };
+
+  const deselectAll = () => setSelectedCars(new Map());
+
+  const updateCarOCB = (id, field, value) => {
+    setSelectedCars((prev) => {
+      const next = new Map(prev);
+      const entry = next.get(id);
+      if (!entry) return next;
+      const updated = { ...entry, [field]: Number(value) };
+      // Recalc OCB price if maxLoss changed
+      if (field === "maxLoss") {
+        updated.ocbPrice = computeOCBPrice(updated.bp, updated.maxLoss, negoPercent);
+      }
+      next.set(id, updated);
+      return next;
+    });
+  };
+
+  // Apply global max loss to all selected
+  const applyGlobalLoss = () => {
+    setSelectedCars((prev) => {
+      const next = new Map();
+      for (const [id, entry] of prev) {
+        const ocbPrice = computeOCBPrice(entry.bp, globalMaxLoss, negoPercent);
+        next.set(id, { ...entry, maxLoss: globalMaxLoss, duration: globalDuration, ocbPrice });
+      }
+      return next;
+    });
+  };
+
+  // OCB summary stats
+  const ocbStats = useMemo(() => {
+    let count = 0, totalBP = 0, totalOCB = 0, totalExpectedLoss = 0;
+    for (const [, entry] of selectedCars) {
+      count++;
+      totalBP += entry.bp;
+      totalOCB += entry.ocbPrice;
+      const expectedDealerBid = entry.ocbPrice * (1 - negoPercent / 100);
+      totalExpectedLoss += expectedDealerBid - entry.bp;
+    }
+    return { count, totalBP, totalOCB, totalExpectedLoss, avgLoss: count ? totalExpectedLoss / count : 0 };
+  }, [selectedCars, negoPercent]);
+
+  const runOCB = async () => {
+    if (!selectedCars.size) { alert("No cars selected for OCB."); return; }
+    if (!currentUser) { alert("Please enter your name in the header first."); return; }
+    if (!confirm(`Run OCB on ${selectedCars.size} cars?\nExpected worst-case loss: ${INR(ocbStats.totalExpectedLoss)}`)) return;
+    setRunning(true);
+
+    let sent = 0;
+    for (const [id, entry] of selectedCars) {
+      await appendToSheet(sheetUrl, {
+        timestamp: new Date().toISOString(),
+        appointmentId: id,
+        region: entry.car.REGION || "",
+        anchorPrice: entry.ocbPrice,
+        auctionStartFor: `OCB_${entry.duration}min`,
+        submittedBy: currentUser,
+        email: managerEmail || "",
+        date: new Date().toLocaleDateString("en-IN"),
+        maxLoss: entry.maxLoss,
+        expectedDealerBid: Math.round(entry.ocbPrice * (1 - negoPercent / 100)),
+      });
+      sent++;
+    }
+
+    if (slackUrl) {
+      await sendSlackMessage(slackUrl,
+        `:dart: *OCB RUN STARTED*\n*Cars:* ${sent} | *Duration:* ${globalDuration} min\n*Nego assumption:* ${negoPercent}% | *Max loss/car:* ₹${globalMaxLoss.toLocaleString("en-IN")}\n*Expected total P&L:* ₹${ocbStats.totalExpectedLoss.toLocaleString("en-IN")}\n*By:* ${currentUser}`
+      );
+    }
+
+    setLastRun({ count: sent, pnl: ocbStats.totalExpectedLoss, time: new Date().toLocaleString("en-IN") });
+    setSelectedCars(new Map());
+    setRunning(false);
+  };
+
+  return (
+    <div>
+      {/* ── OCB Pricing Logic Explainer ────────────────────────── */}
+      <div style={{ ...S.card, marginBottom: 16, background: "#F0F9FF", border: "1px solid #BAE6FD" }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: "#0369A1", marginBottom: 8 }}>🎯 How OCB Pricing Works</div>
+        <div style={{ fontSize: 13, color: "#0C4A6E", lineHeight: 1.8 }}>
+          You set an <b>OCB price</b>. The dealer can negotiate down by up to <b>{negoPercent}%</b>, so their actual bid = OCB × {(100 - negoPercent)}%.
+          <br />
+          If your <b>max acceptable loss</b> is ₹{globalMaxLoss.toLocaleString("en-IN")}/car, the system auto-calculates the minimum OCB price as:
+          <br />
+          <span style={{ fontFamily: "monospace", background: "#E0F2FE", padding: "2px 8px", borderRadius: 4, fontWeight: 700 }}>
+            OCB Price ≥ (BP − MaxLoss) ÷ {((100 - negoPercent) / 100).toFixed(2)}
+          </span>
+        </div>
+      </div>
+
+      {/* ── Global OCB Controls ──────────────────────────────────── */}
+      <div style={{ ...S.card, marginBottom: 16 }}>
+        <div style={S.cHead}>⚙️ OCB Parameters</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr auto", gap: 14, alignItems: "end" }}>
+          <div>
+            <label style={S.fLabel}>Max Loss per Car (₹)</label>
+            <input style={S.inp} type="number" value={globalMaxLoss} onChange={(e) => setGlobalMaxLoss(Number(e.target.value))} />
+          </div>
+          <div>
+            <label style={S.fLabel}>Dealer Nego Range (%)</label>
+            <input style={S.inp} type="number" min={0} max={30} value={negoPercent} onChange={(e) => setNegoPercent(Number(e.target.value))} />
+          </div>
+          <div>
+            <label style={S.fLabel}>OCB Duration (min)</label>
+            <select style={S.inp} value={globalDuration} onChange={(e) => setGlobalDuration(Number(e.target.value))}>
+              <option value={30}>30 min</option>
+              <option value={60}>60 min</option>
+              <option value={90}>90 min</option>
+              <option value={120}>120 min</option>
+              <option value={180}>180 min</option>
+              <option value={240}>240 min</option>
+            </select>
+          </div>
+          <div>
+            <label style={S.fLabel}>Example: ₹3L car</label>
+            <div style={{ padding: "11px 14px", background: "#FEF3C7", borderRadius: 8, fontSize: 13, fontWeight: 700, color: "#92400E", border: "1px solid #FDE68A" }}>
+              OCB = {INR(computeOCBPrice(300000, globalMaxLoss, negoPercent))} → Dealer bids ~{INR(Math.round(computeOCBPrice(300000, globalMaxLoss, negoPercent) * (1 - negoPercent / 100)))}
+            </div>
+          </div>
+          <button style={{ ...S.pri, background: "#8B5CF6", padding: "11px 20px" }} onClick={applyGlobalLoss}>
+            Apply to All Selected
+          </button>
+        </div>
+      </div>
+
+      {/* ── OCB Summary ──────────────────────────────────────────── */}
+      <div style={S.metrics}>
+        <div style={S.mCard}><div style={{ fontSize: 24, fontWeight: 900, color: "#3B82F6" }}>{ocbStats.count}</div><div style={S.mLabel}>Cars Selected</div></div>
+        <div style={S.mCard}><div style={{ fontSize: 24, fontWeight: 900, color: "#F59E0B" }}>{INR(ocbStats.totalBP)}</div><div style={S.mLabel}>Total BP</div></div>
+        <div style={S.mCard}><div style={{ fontSize: 24, fontWeight: 900, color: "#8B5CF6" }}>{INR(ocbStats.totalOCB)}</div><div style={S.mLabel}>Total OCB Value</div></div>
+        <div style={S.mCard}><div style={{ fontSize: 24, fontWeight: 900, color: ocbStats.totalExpectedLoss >= 0 ? "#10B981" : "#EF4444" }}>{INR(ocbStats.totalExpectedLoss)}</div><div style={S.mLabel}>Expected P&L (worst case)</div></div>
+        <div style={S.mCard}><div style={{ fontSize: 24, fontWeight: 900, color: ocbStats.avgLoss >= 0 ? "#10B981" : "#EF4444" }}>{INR(ocbStats.avgLoss)}</div><div style={S.mLabel}>Avg Loss / Car</div></div>
+      </div>
+
+      {/* ── Car Selector Table ────────────────────────────────────── */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+        <input style={S.searchBox} placeholder="🔍 Search App ID, Make, Model…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} />
+        <select style={S.sel} value={bucketF} onChange={(e) => { setBucketF(e.target.value); setPage(0); }}>
+          {buckets.map((b) => <option key={b} value={b}>{b === "ALL" ? "📅 All Buckets" : b}</option>)}
+        </select>
+        <select style={S.sel} value={regionF} onChange={(e) => { setRegionF(e.target.value); setPage(0); }}>
+          {regions.map((r) => <option key={r} value={r}>{r === "ALL" ? "📍 All Regions" : r}</option>)}
+        </select>
+        <button style={{ ...S.pri, padding: "8px 16px", fontSize: 12, background: "#10B981" }} onClick={selectAll}>Select All ({filtered.length})</button>
+        <button style={{ ...S.pri, padding: "8px 16px", fontSize: 12, background: "#EF4444" }} onClick={deselectAll}>Clear All</button>
+        <span style={S.fCount}>{selectedCars.size} selected / {filtered.length} shown</span>
+      </div>
+
+      <div style={S.tWrap}>
+        <div style={{ ...S.tScroll, maxHeight: "50vh" }}>
+          <table style={S.table}>
+            <thead><tr>
+              {["", "App ID", "Make / Model", "Year", "Bucket", "Region", "Buying Price", "OCB Price", "Dealer Bid (~)", "P&L", "Max Loss", "Duration"].map((h) => <th key={h} style={S.th}>{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {pg.map((car) => {
+                const id = car.LEAD_ID;
+                const sel = selectedCars.get(id);
+                const bp = toNum(car.BUYING_PRICE) || 0;
+                const ocbPrice = sel ? sel.ocbPrice : computeOCBPrice(bp, globalMaxLoss, negoPercent);
+                const dealerBid = Math.round(ocbPrice * (1 - negoPercent / 100));
+                const pnl = dealerBid - bp;
+                return (
+                  <tr key={id} className="tr" style={{ background: sel ? "#EFF6FF" : "transparent" }}>
+                    <td style={S.td}>
+                      <input type="checkbox" checked={!!sel} onChange={() => toggleCar(car)} style={{ width: 16, height: 16, accentColor: "#3B82F6", cursor: "pointer" }} />
+                    </td>
+                    <td style={{ ...S.td, color: "#3B82F6", fontWeight: 700 }}>{id}</td>
+                    <td style={{ ...S.td, fontWeight: 600 }}>{car.MAKE} {car.MODEL}</td>
+                    <td style={S.td}>{car.Year || "—"}</td>
+                    <td style={S.td}><span style={S.bucketChip}>{car.AGE_BUCKET || "—"}</span></td>
+                    <td style={S.td}>{car.REGION || "—"}</td>
+                    <td style={{ ...S.td, textAlign: "right", fontWeight: 700 }}>{INR(bp)}</td>
+                    <td style={{ ...S.td, textAlign: "right", fontWeight: 800, color: "#8B5CF6" }}>{INR(ocbPrice)}</td>
+                    <td style={{ ...S.td, textAlign: "right", color: "#64748B" }}>~{INR(dealerBid)}</td>
+                    <td style={{ ...S.td, textAlign: "right", fontWeight: 700, color: pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(pnl)}</td>
+                    <td style={S.td}>
+                      {sel ? (
+                        <input type="number" value={sel.maxLoss} onChange={(e) => updateCarOCB(id, "maxLoss", e.target.value)}
+                          style={{ ...S.inp, width: 80, padding: "6px 8px", fontSize: 12, textAlign: "right" }} />
+                      ) : <span style={{ color: "#94A3B8" }}>₹{globalMaxLoss.toLocaleString("en-IN")}</span>}
+                    </td>
+                    <td style={S.td}>
+                      {sel ? (
+                        <select value={sel.duration} onChange={(e) => updateCarOCB(id, "duration", e.target.value)}
+                          style={{ ...S.sel, padding: "6px 8px", fontSize: 12 }}>
+                          <option value={30}>30m</option>
+                          <option value={60}>60m</option>
+                          <option value={90}>90m</option>
+                          <option value={120}>2h</option>
+                          <option value={180}>3h</option>
+                          <option value={240}>4h</option>
+                        </select>
+                      ) : <span style={{ color: "#94A3B8" }}>{globalDuration}m</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div style={S.pag}>
+          <button style={S.pgB} disabled={page === 0} onClick={() => setPage(0)}>⟨⟨</button>
+          <button style={S.pgB} disabled={page === 0} onClick={() => setPage(page - 1)}>← Prev</button>
+          <span style={S.pgI}>Page <b>{page + 1}</b>/<b>{tp || 1}</b></span>
+          <button style={S.pgB} disabled={page >= tp - 1} onClick={() => setPage(page + 1)}>Next →</button>
+          <button style={S.pgB} disabled={page >= tp - 1} onClick={() => setPage(tp - 1)}>⟩⟩</button>
+        </div>
+      </div>
+
+      {/* ── RUN OCB ─────────────────────────────────────────────── */}
+      <div style={{ marginTop: 20, display: "flex", gap: 16, alignItems: "center", padding: 20, background: "#FFF", border: "1px solid #E2E8F0", borderRadius: 12, boxShadow: "0 1px 2px rgba(15,23,42,0.03)" }}>
+        <button style={{ ...S.pri, background: "#DC2626", padding: "16px 36px", fontSize: 16 }} onClick={runOCB} disabled={running || !selectedCars.size}>
+          {running ? "Running…" : `🎯 Run OCB on ${selectedCars.size} cars`}
         </button>
         <div style={{ color: "#64748B", fontSize: 13 }}>
-          Expected P&L: <b style={{ color: globalStats.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(globalStats.pnl)}</b>
-          {" · "}Avg: <b style={{ color: globalStats.avgPnL >= 0 ? "#10B981" : "#EF4444" }}>{INR(globalStats.avgPnL)}/car</b>
+          Max loss budget: <b style={{ color: "#EF4444" }}>{INR(ocbStats.totalExpectedLoss)}</b>
+          {" · "}Avg: <b>{INR(ocbStats.avgLoss)}/car</b>
         </div>
         {lastRun && (
           <div style={{ marginLeft: "auto", color: "#10B981", fontSize: 13, fontWeight: 600 }}>
-            ✅ Last run: {lastRun.count.toLocaleString()} cars · {INR(lastRun.pnl)} · {lastRun.time}
+            ✅ Last: {lastRun.count} cars · {INR(lastRun.pnl)} · {lastRun.time}
           </div>
         )}
       </div>
     </div>
   );
 }
+
 
 
 // ═════════════════════════════════════════════════════════════════════
