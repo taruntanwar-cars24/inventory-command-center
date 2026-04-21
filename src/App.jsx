@@ -302,6 +302,8 @@ export default function App() {
     { id: "history", icon: "📜", label: "Quote History" },
     { id: "dashboard", icon: "📊", label: "P&L Management" },
     { id: "auction", icon: "🔨", label: "Auction Console" },
+    { id: "bizsnapshot", icon: "📈", label: "Business Snapshot" },
+    { id: "invsnapshot", icon: "🔍", label: "Inventory Snapshot" },
     { id: "settings", icon: "⚙️", label: "Settings" },
   ];
 
@@ -343,7 +345,7 @@ export default function App() {
       </header>
 
       {/* UPLOAD */}
-      {!rows && tab !== "settings" && tab !== "dashboard" && (
+      {!rows && tab !== "settings" && tab !== "dashboard" && tab !== "bizsnapshot" && (
         <div style={S.uploadWrap}>
           <div style={{ ...S.dropzone, ...(dragOver ? S.dzHover : {}) }}
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -372,6 +374,8 @@ export default function App() {
         {rows && tab === "auction" && (
           <AuctionTab rows={rows} slackUrl={slackUrl} sheetUrl={sheetUrl} managerEmail={managerEmail} currentUser={currentUser} />
         )}
+        {tab === "bizsnapshot" && <BusinessSnapshotTab />}
+        {rows && tab === "invsnapshot" && <InventorySnapshotTab rows={rows} />}
         {tab === "settings" && (
           <SettingsTab slackUrl={slackUrl} setSlackUrl={setSlackUrl}
             sheetUrl={sheetUrl} setSheetUrl={setSheetUrl}
@@ -2093,8 +2097,486 @@ function OCBConsole({ rows, slackUrl, sheetUrl, managerEmail, currentUser }) {
 
 
 
+
 // ═════════════════════════════════════════════════════════════════════
-//  TAB 6 — SETTINGS
+//  TAB 7 — BUSINESS SNAPSHOT
+//  All key inventory-sales metrics: verifications, SOs, cancellations,
+//  re-cancellations, SBND, GFD, dealer activity, lead fees — MTD vs LMTD
+// ═════════════════════════════════════════════════════════════════════
+const BIZ_SNAP_DATA = {
+  MTD: {
+    verificationTarget: 1200,
+    soTarget: 950,
+    verifications: { total: 842, byBucket: [{ b: "0-30", v: 380 }, { b: "30-60", v: 210 }, { b: "60-90", v: 142 }, { b: "90-120", v: 65 }, { b: "120-150", v: 28 }, { b: "150-180", v: 12 }, { b: "180+", v: 5 }] },
+    liveCancellations: 124,
+    reCancellations: { total: 68, byBucket: [{ b: "0-30", v: 22 }, { b: "30-60", v: 18 }, { b: "60-90", v: 14 }, { b: "90-120", v: 8 }, { b: "120+", v: 6 }] },
+    stockOuts: { total: 718, byBucket: [{ b: "0-30", v: 320 }, { b: "30-60", v: 178 }, { b: "60-90", v: 118 }, { b: "90-120", v: 58 }, { b: "120-150", v: 28 }, { b: "150-180", v: 10 }, { b: "180+", v: 6 }] },
+    sbnd: {
+      total: 129,
+      byBucket: [{ b: "0-30", v: 45 }, { b: "30-60", v: 32 }, { b: "60-90", v: 22 }, { b: "90-120", v: 14 }, { b: "120-150", v: 8 }, { b: "150-180", v: 5 }, { b: "180+", v: 3 }],
+      byAgeing: [{ a: "0-3 days", v: 52 }, { a: "3-7 days", v: 38 }, { a: "7-10 days", v: 22 }, { a: "10+ days", v: 17 }],
+    },
+    gfd: { total: 48, byBucket: [{ b: "0-30", v: 18 }, { b: "30-60", v: 12 }, { b: "60-90", v: 8 }, { b: "90-120", v: 5 }, { b: "120+", v: 5 }] },
+    dealerActivity: {
+      dayAuction: { auctionedCars: 1840, totalAuctions: 8520, auctionPerCar: 4.6, impressions: 42500, views: 18200, bids: 6340, liveImprAuc: 23.1 },
+      ocb: { auctionedCars: 420, totalAuctions: 420, auctionPerCar: 1.0, impressions: 8800, views: 3200, bids: 1450, liveImprAuc: 20.9 },
+      touchBuy: { auctionedCars: 280, totalAuctions: 280, auctionPerCar: 1.0, impressions: 5600, views: 2100, bids: 820, liveImprAuc: 20.0 },
+    },
+    leadFeeEarned: 12_50_000,
+    leadFeeRefunds: 1_80_000,
+    sbndOver10Days: 17,
+  },
+  LMTD: {
+    verificationTarget: 1200,
+    soTarget: 950,
+    verifications: { total: 910, byBucket: [{ b: "0-30", v: 415 }, { b: "30-60", v: 228 }, { b: "60-90", v: 152 }, { b: "90-120", v: 68 }, { b: "120-150", v: 30 }, { b: "150-180", v: 12 }, { b: "180+", v: 5 }] },
+    liveCancellations: 108,
+    reCancellations: { total: 58, byBucket: [{ b: "0-30", v: 18 }, { b: "30-60", v: 16 }, { b: "60-90", v: 12 }, { b: "90-120", v: 7 }, { b: "120+", v: 5 }] },
+    stockOuts: { total: 782, byBucket: [{ b: "0-30", v: 350 }, { b: "30-60", v: 195 }, { b: "60-90", v: 128 }, { b: "90-120", v: 62 }, { b: "120-150", v: 30 }, { b: "150-180", v: 11 }, { b: "180+", v: 6 }] },
+    sbnd: {
+      total: 118,
+      byBucket: [{ b: "0-30", v: 42 }, { b: "30-60", v: 28 }, { b: "60-90", v: 20 }, { b: "90-120", v: 12 }, { b: "120-150", v: 8 }, { b: "150-180", v: 5 }, { b: "180+", v: 3 }],
+      byAgeing: [{ a: "0-3 days", v: 48 }, { a: "3-7 days", v: 35 }, { a: "7-10 days", v: 20 }, { a: "10+ days", v: 15 }],
+    },
+    gfd: { total: 42, byBucket: [{ b: "0-30", v: 16 }, { b: "30-60", v: 10 }, { b: "60-90", v: 7 }, { b: "90-120", v: 5 }, { b: "120+", v: 4 }] },
+    dealerActivity: {
+      dayAuction: { auctionedCars: 1960, totalAuctions: 9100, auctionPerCar: 4.6, impressions: 45200, views: 19500, bids: 6800, liveImprAuc: 23.1 },
+      ocb: { auctionedCars: 450, totalAuctions: 450, auctionPerCar: 1.0, impressions: 9400, views: 3500, bids: 1580, liveImprAuc: 20.9 },
+      touchBuy: { auctionedCars: 310, totalAuctions: 310, auctionPerCar: 1.0, impressions: 6200, views: 2350, bids: 910, liveImprAuc: 20.0 },
+    },
+    leadFeeEarned: 14_00_000,
+    leadFeeRefunds: 1_60_000,
+    sbndOver10Days: 15,
+  },
+};
+
+function BusinessSnapshotTab() {
+  const [period, setPeriod] = useState("MTD");
+  const [activityFilter, setActivityFilter] = useState("dayAuction");
+  const mtd = BIZ_SNAP_DATA.MTD;
+  const lmtd = BIZ_SNAP_DATA.LMTD;
+  const d = period === "LMTD" ? lmtd : mtd;
+  const other = period === "LMTD" ? mtd : lmtd;
+  const otherLabel = period === "LMTD" ? "MTD" : "LMTD";
+
+  const delta = (curr, prev) => {
+    if (!prev) return null;
+    const diff = curr - prev;
+    const pct = prev ? ((diff / prev) * 100).toFixed(1) : 0;
+    return { diff, pct, up: diff >= 0 };
+  };
+
+  const MetricCard = ({ label, value, fmt, prev, color, sub }) => {
+    const v = fmt === "inr" ? INR(value) : (typeof value === "number" ? value.toLocaleString() : value);
+    const dl = prev != null ? delta(value, prev) : null;
+    return (
+      <div style={{ ...S.card, padding: "16px 18px" }}>
+        <div style={{ fontSize: 10, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 }}>{label}</div>
+        <div style={{ fontSize: 24, fontWeight: 900, color: color || "#0F172A", marginTop: 6, letterSpacing: "-0.5px" }}>{v}</div>
+        {dl && (
+          <div style={{ fontSize: 11, marginTop: 4, color: dl.up ? "#10B981" : "#EF4444", fontWeight: 600 }}>
+            {dl.up ? "▲" : "▼"} {Math.abs(dl.diff).toLocaleString()} ({dl.up ? "+" : ""}{dl.pct}%) vs {otherLabel}
+          </div>
+        )}
+        {sub && <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>{sub}</div>}
+      </div>
+    );
+  };
+
+  const BucketBar = ({ data, total, color }) => (
+    <div style={{ display: "flex", gap: 4, marginTop: 8 }}>
+      {data.map((r) => {
+        const pct = total ? (r.v / total) * 100 : 0;
+        return (
+          <div key={r.b} style={{ flex: Math.max(pct, 3), background: color || "#3B82F6", borderRadius: 4, padding: "6px 4px", textAlign: "center", fontSize: 9, color: "#fff", fontWeight: 700, minWidth: 30, opacity: 0.7 + pct / 200 }}>
+            <div>{r.b}</div>
+            <div style={{ fontSize: 12 }}>{r.v}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const BucketTable = ({ data, label }) => (
+    <table style={{ ...S.table, fontSize: 12, marginTop: 8 }}>
+      <thead><tr><th style={S.th}>Bucket</th><th style={S.th}>{label}</th><th style={S.th}>%</th></tr></thead>
+      <tbody>
+        {data.map((r) => (
+          <tr key={r.b || r.a} className="tr">
+            <td style={S.td}><span style={S.bucketChip}>{r.b || r.a}</span></td>
+            <td style={{ ...S.td, fontWeight: 700 }}>{r.v.toLocaleString()}</td>
+            <td style={{ ...S.td, color: "#64748B" }}>{data.reduce((s, x) => s + x.v, 0) ? ((r.v / data.reduce((s, x) => s + x.v, 0)) * 100).toFixed(1) : 0}%</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+
+  const act = d.dealerActivity[activityFilter];
+
+  return (
+    <div>
+      {/* Period toggle */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, alignItems: "center" }}>
+        {["MTD", "LMTD"].map((pr) => (
+          <button key={pr} onClick={() => setPeriod(pr)} style={{
+            padding: "10px 24px", borderRadius: 8, border: period === pr ? "2px solid #3B82F6" : "2px solid #E2E8F0",
+            background: period === pr ? "#EFF6FF" : "#FFF", color: period === pr ? "#1D4ED8" : "#64748B",
+            fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit",
+          }}>{pr}</button>
+        ))}
+        <div style={{ marginLeft: "auto", padding: "8px 16px", background: "#FEF3C7", borderRadius: 8, fontSize: 12, color: "#78350F", fontWeight: 600 }}>
+          ⚠️ Dummy data — wire to live queries later
+        </div>
+      </div>
+
+      {/* ── Targets & headline KPIs ─────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
+        <div style={{ ...S.card, padding: "16px 18px", background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
+          <div style={{ fontSize: 10, color: "#166534", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 }}>Verification Target</div>
+          <div style={{ fontSize: 28, fontWeight: 900, color: "#166534", marginTop: 4 }}>{d.verificationTarget.toLocaleString()}</div>
+          <div style={{ fontSize: 12, color: "#15803D", marginTop: 4 }}>Achieved: {d.verifications.total.toLocaleString()} ({((d.verifications.total / d.verificationTarget) * 100).toFixed(0)}%)</div>
+          <div style={{ height: 6, background: "#DCFCE7", borderRadius: 3, marginTop: 8, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${Math.min(100, (d.verifications.total / d.verificationTarget) * 100)}%`, background: "#22C55E", borderRadius: 3 }} />
+          </div>
+        </div>
+        <div style={{ ...S.card, padding: "16px 18px", background: "#EFF6FF", border: "1px solid #BFDBFE" }}>
+          <div style={{ fontSize: 10, color: "#1E40AF", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 }}>SO Target</div>
+          <div style={{ fontSize: 28, fontWeight: 900, color: "#1E40AF", marginTop: 4 }}>{d.soTarget.toLocaleString()}</div>
+          <div style={{ fontSize: 12, color: "#1D4ED8", marginTop: 4 }}>Achieved: {d.stockOuts.total.toLocaleString()} ({((d.stockOuts.total / d.soTarget) * 100).toFixed(0)}%)</div>
+          <div style={{ height: 6, background: "#DBEAFE", borderRadius: 3, marginTop: 8, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${Math.min(100, (d.stockOuts.total / d.soTarget) * 100)}%`, background: "#3B82F6", borderRadius: 3 }} />
+          </div>
+        </div>
+        <MetricCard label="Live Cancellations" value={d.liveCancellations} prev={other.liveCancellations} color="#EF4444" />
+        <MetricCard label="SBND > 10 Days" value={d.sbndOver10Days} prev={other.sbndOver10Days} color="#F59E0B" sub="Needs follow-up" />
+      </div>
+
+      {/* ── Core metrics grid ───────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 20 }}>
+        {/* Verifications */}
+        <div style={S.card}>
+          <div style={S.cHead}>✅ Verifications</div>
+          <div style={{ fontSize: 28, fontWeight: 900, color: "#10B981" }}>{d.verifications.total.toLocaleString()}</div>
+          <BucketBar data={d.verifications.byBucket} total={d.verifications.total} color="#10B981" />
+          <BucketTable data={d.verifications.byBucket} label="Verified" />
+        </div>
+
+        {/* Stock Outs */}
+        <div style={S.card}>
+          <div style={S.cHead}>📦 Stock Outs</div>
+          <div style={{ fontSize: 28, fontWeight: 900, color: "#3B82F6" }}>{d.stockOuts.total.toLocaleString()}</div>
+          <BucketBar data={d.stockOuts.byBucket} total={d.stockOuts.total} color="#3B82F6" />
+          <BucketTable data={d.stockOuts.byBucket} label="SOs" />
+        </div>
+
+        {/* Re-Cancellations */}
+        <div style={S.card}>
+          <div style={S.cHead}>🔄 Re-Cancellations</div>
+          <div style={{ fontSize: 28, fontWeight: 900, color: "#EF4444" }}>{d.reCancellations.total.toLocaleString()}</div>
+          <BucketBar data={d.reCancellations.byBucket} total={d.reCancellations.total} color="#EF4444" />
+          <BucketTable data={d.reCancellations.byBucket} label="Re-Cancel" />
+        </div>
+      </div>
+
+      {/* ── SBND (by bucket + by ageing) ────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+        <div style={S.card}>
+          <div style={S.cHead}>🚛 SBND by SI Bucket ({d.sbnd.total})</div>
+          <BucketBar data={d.sbnd.byBucket} total={d.sbnd.total} color="#F59E0B" />
+          <BucketTable data={d.sbnd.byBucket} label="SBND" />
+        </div>
+        <div style={S.card}>
+          <div style={S.cHead}>🚛 SBND by Ageing ({d.sbnd.total})</div>
+          <BucketBar data={d.sbnd.byAgeing.map((r) => ({ b: r.a, v: r.v }))} total={d.sbnd.total} color="#8B5CF6" />
+          <BucketTable data={d.sbnd.byAgeing.map((r) => ({ b: r.a, v: r.v }))} label="Cars" />
+        </div>
+      </div>
+
+      {/* ── GFD ──────────────────────────────────────────────────── */}
+      <div style={{ ...S.card, marginBottom: 20 }}>
+        <div style={S.cHead}>🎁 GFD (Gate Fee Done) — {d.gfd.total}</div>
+        <BucketBar data={d.gfd.byBucket} total={d.gfd.total} color="#06B6D4" />
+        <BucketTable data={d.gfd.byBucket} label="GFD" />
+      </div>
+
+      {/* ── Dealer Activity ──────────────────────────────────────── */}
+      <div style={{ ...S.card, marginBottom: 20 }}>
+        <div style={S.cHead}>🏪 Dealer Activity on Inventory Cars</div>
+        <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+          {[{ id: "dayAuction", label: "Day Auctions" }, { id: "ocb", label: "OCB" }, { id: "touchBuy", label: "Touch & Buy" }].map((f) => (
+            <button key={f.id} onClick={() => setActivityFilter(f.id)} style={{
+              padding: "8px 16px", borderRadius: 8, border: activityFilter === f.id ? "2px solid #3B82F6" : "1px solid #E2E8F0",
+              background: activityFilter === f.id ? "#EFF6FF" : "#FFF", color: activityFilter === f.id ? "#1D4ED8" : "#64748B",
+              fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit",
+            }}>{f.label}</button>
+          ))}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+          <div style={{ ...S.card, padding: "14px", background: "#F8FAFC" }}>
+            <div style={{ fontSize: 10, color: "#64748B", textTransform: "uppercase", fontWeight: 700 }}>Auctioned Cars</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: "#0F172A", marginTop: 4 }}>{act.auctionedCars.toLocaleString()}</div>
+          </div>
+          <div style={{ ...S.card, padding: "14px", background: "#F8FAFC" }}>
+            <div style={{ fontSize: 10, color: "#64748B", textTransform: "uppercase", fontWeight: 700 }}>Total Auctions</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: "#3B82F6", marginTop: 4 }}>{act.totalAuctions.toLocaleString()}</div>
+            <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>Auctions/Car: <b>{act.auctionPerCar}</b></div>
+          </div>
+          <div style={{ ...S.card, padding: "14px", background: "#F8FAFC" }}>
+            <div style={{ fontSize: 10, color: "#64748B", textTransform: "uppercase", fontWeight: 700 }}>Impressions / Views / Bids</div>
+            <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
+              <div><div style={{ fontSize: 18, fontWeight: 900, color: "#8B5CF6" }}>{(act.impressions / 1000).toFixed(1)}K</div><div style={{ fontSize: 9, color: "#94A3B8" }}>Impressions</div></div>
+              <div><div style={{ fontSize: 18, fontWeight: 900, color: "#F59E0B" }}>{(act.views / 1000).toFixed(1)}K</div><div style={{ fontSize: 9, color: "#94A3B8" }}>Views</div></div>
+              <div><div style={{ fontSize: 18, fontWeight: 900, color: "#10B981" }}>{(act.bids / 1000).toFixed(1)}K</div><div style={{ fontSize: 9, color: "#94A3B8" }}>Bids</div></div>
+            </div>
+          </div>
+          <div style={{ ...S.card, padding: "14px", background: "#F8FAFC" }}>
+            <div style={{ fontSize: 10, color: "#64748B", textTransform: "uppercase", fontWeight: 700 }}>Impressions / Auction</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: "#EC4899", marginTop: 4 }}>{act.liveImprAuc}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Lead Fees ────────────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+        <MetricCard label="Lead Fee Earned" value={d.leadFeeEarned} fmt="inr" prev={other.leadFeeEarned} color="#10B981" />
+        <MetricCard label="Lead Fee Refunds" value={d.leadFeeRefunds} fmt="inr" prev={other.leadFeeRefunds} color="#EF4444" />
+        <MetricCard label="Net Lead Fee" value={d.leadFeeEarned - d.leadFeeRefunds} fmt="inr" prev={other.leadFeeEarned - other.leadFeeRefunds} color="#3B82F6" />
+      </div>
+    </div>
+  );
+}
+
+
+// ═════════════════════════════════════════════════════════════════════
+//  TAB 8 — QUICK INVENTORY SNAPSHOT
+//  Age-wise, region-wise, parking-wise distribution.
+//  Tesla count. Sellable vs non-sellable (RI/Mismatch/Hold/Legal).
+// ═════════════════════════════════════════════════════════════════════
+function InventorySnapshotTab({ rows }) {
+  if (!rows || !rows.length) return (
+    <div style={{ ...S.card, textAlign: "center", padding: 60, color: "#94A3B8" }}>Upload stuck inventory file to see the snapshot.</div>
+  );
+
+  // ── Age-wise distribution (from sale cancel date) ────────────
+  const ageDist = useMemo(() => {
+    const buckets = [
+      { label: "0-30", min: 0, max: 30 },
+      { label: "30-60", min: 30, max: 60 },
+      { label: "60-90", min: 60, max: 90 },
+      { label: "90-120", min: 90, max: 120 },
+      { label: "120-150", min: 120, max: 150 },
+      { label: "150-180", min: 150, max: 180 },
+      { label: "180+", min: 180, max: 99999 },
+    ];
+    const map = {};
+    for (const b of buckets) map[b.label] = { label: b.label, count: 0, totalBP: 0 };
+
+    const now = new Date();
+    for (const r of rows) {
+      // Try AGE_BUCKET first, fall back to computing from SALE_CANCEL_DATE
+      const bucket = String(r.AGE_BUCKET || "").trim();
+      if (bucket && map[bucket]) {
+        map[bucket].count++;
+        map[bucket].totalBP += toNum(r.BUYING_PRICE) || 0;
+      } else {
+        // Try computing age from cancel date
+        const cd = r.SALE_CANCEL_DATE;
+        if (cd) {
+          const d = new Date(cd);
+          if (!isNaN(d.getTime())) {
+            const age = Math.floor((now - d) / (1000 * 60 * 60 * 24));
+            for (const b of buckets) {
+              if (age >= b.min && age < b.max) { map[b.label].count++; map[b.label].totalBP += toNum(r.BUYING_PRICE) || 0; break; }
+            }
+          }
+        }
+      }
+    }
+    return Object.values(map);
+  }, [rows]);
+
+  const totalCars = ageDist.reduce((s, r) => s + r.count, 0);
+
+  // ── Region-wise ──────────────────────────────────────────────
+  const regionDist = useMemo(() => {
+    const map = {};
+    for (const r of rows) {
+      const reg = r.REGION || "Unknown";
+      if (!map[reg]) map[reg] = { region: reg, count: 0, totalBP: 0 };
+      map[reg].count++;
+      map[reg].totalBP += toNum(r.BUYING_PRICE) || 0;
+    }
+    return Object.values(map).sort((a, b) => b.count - a.count);
+  }, [rows]);
+
+  // ── Parking-wise ─────────────────────────────────────────────
+  const parkingDist = useMemo(() => {
+    const map = {};
+    for (const r of rows) {
+      const pk = r.PARKING_REGION || r.ZONE || "Unknown";
+      if (!map[pk]) map[pk] = { parking: pk, count: 0 };
+      map[pk].count++;
+    }
+    return Object.values(map).sort((a, b) => b.count - a.count);
+  }, [rows]);
+
+  // ── Tesla ────────────────────────────────────────────────────
+  const teslaCars = useMemo(() => rows.filter((r) => truthy(r.TESLA) || truthy(r["Tesla Flag"])).length, [rows]);
+
+  // ── Sellable vs Non-sellable ─────────────────────────────────
+  const sellability = useMemo(() => {
+    let riPending = 0, inspMismatch = 0, auctionHold = 0, legal = 0;
+    for (const r of rows) {
+      if (truthy(r["RI Pending"])) riPending++;
+      if (truthy(r["Insp Mismatch"]) || truthy(r["Inspection Mismatch"]) || truthy(r["INSP_PARKING_MISMATCH"])) inspMismatch++;
+      if (truthy(r["Auction Hold"]) || truthy(r["Auction Hold input"]) || truthy(r["Auction Stop"])) auctionHold++;
+      if (truthy(r["Legal"]) || truthy(r["Legal Hold"])) legal++;
+    }
+    const nonSellable = new Set();
+    for (const r of rows) {
+      if (truthy(r["RI Pending"]) || truthy(r["Insp Mismatch"]) || truthy(r["Inspection Mismatch"]) || truthy(r["INSP_PARKING_MISMATCH"]) ||
+          truthy(r["Auction Hold"]) || truthy(r["Auction Hold input"]) || truthy(r["Auction Stop"]) ||
+          truthy(r["Legal"]) || truthy(r["Legal Hold"])) {
+        nonSellable.add(r.LEAD_ID);
+      }
+    }
+    const sellable = totalCars - nonSellable.size;
+    return { sellable, nonSellable: nonSellable.size, riPending, inspMismatch, auctionHold, legal };
+  }, [rows, totalCars]);
+
+  const maxAge = Math.max(...ageDist.map((r) => r.count), 1);
+
+  return (
+    <div>
+      {/* ── Top KPIs ────────────────────────────────────────────── */}
+      <div style={S.metrics}>
+        <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: "#3B82F6" }}>{totalCars.toLocaleString()}</div><div style={S.mLabel}>Total Stuck Cars</div></div>
+        <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: "#10B981" }}>{sellability.sellable.toLocaleString()}</div><div style={S.mLabel}>Sellable</div></div>
+        <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: "#EF4444" }}>{sellability.nonSellable.toLocaleString()}</div><div style={S.mLabel}>Non-Sellable</div></div>
+        <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: "#F59E0B" }}>{teslaCars.toLocaleString()}</div><div style={S.mLabel}>Tesla Cars</div></div>
+        <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: "#8B5CF6" }}>{regionDist.length}</div><div style={S.mLabel}>Regions</div></div>
+      </div>
+
+      {/* ── Age-wise chart + table ──────────────────────────────── */}
+      <div style={{ ...S.card, marginBottom: 20 }}>
+        <div style={S.cHead}>📊 Age-wise Distribution (from Sale Cancel Date)</div>
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-end", height: 160, marginBottom: 16, padding: "0 8px" }}>
+          {ageDist.map((b) => {
+            const h = maxAge ? (b.count / maxAge) * 140 : 0;
+            const pct = totalCars ? ((b.count / totalCars) * 100).toFixed(0) : 0;
+            return (
+              <div key={b.label} style={{ flex: 1, textAlign: "center" }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: "#0F172A", marginBottom: 4 }}>{b.count}</div>
+                <div style={{ height: Math.max(h, 4), background: `hsl(${220 - (parseInt(b.label) || 180) * 0.8}, 70%, 55%)`, borderRadius: "6px 6px 0 0", transition: "height 0.3s" }} />
+                <div style={{ fontSize: 10, color: "#64748B", marginTop: 6, fontWeight: 700 }}>{b.label}</div>
+                <div style={{ fontSize: 9, color: "#94A3B8" }}>{pct}%</div>
+              </div>
+            );
+          })}
+        </div>
+        <table style={S.table}>
+          <thead><tr>{["SI Bucket", "Cars", "% of Total", "Avg Buying Price", "Total BP"].map((h) => <th key={h} style={S.th}>{h}</th>)}</tr></thead>
+          <tbody>
+            {ageDist.map((b) => (
+              <tr key={b.label} className="tr">
+                <td style={S.td}><span style={S.bucketChip}>{b.label}</span></td>
+                <td style={{ ...S.td, fontWeight: 800, fontSize: 15 }}>{b.count.toLocaleString()}</td>
+                <td style={S.td}>{totalCars ? ((b.count / totalCars) * 100).toFixed(1) : 0}%</td>
+                <td style={{ ...S.td, fontVariantNumeric: "tabular-nums" }}>{INR(b.count ? b.totalBP / b.count : 0)}</td>
+                <td style={{ ...S.td, fontVariantNumeric: "tabular-nums" }}>{INR(b.totalBP)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ── Region + Parking side by side ────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+        <div style={S.card}>
+          <div style={S.cHead}>📍 Region-wise ({regionDist.length} regions)</div>
+          <div style={{ maxHeight: 350, overflowY: "auto" }}>
+            <table style={S.table}>
+              <thead><tr>{["Region", "Cars", "%", "Avg BP"].map((h) => <th key={h} style={S.th}>{h}</th>)}</tr></thead>
+              <tbody>
+                {regionDist.map((r) => (
+                  <tr key={r.region} className="tr">
+                    <td style={{ ...S.td, fontWeight: 600 }}>{r.region}</td>
+                    <td style={{ ...S.td, fontWeight: 700 }}>{r.count}</td>
+                    <td style={S.td}>{((r.count / totalCars) * 100).toFixed(1)}%</td>
+                    <td style={{ ...S.td, fontVariantNumeric: "tabular-nums" }}>{INR(r.count ? r.totalBP / r.count : 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div style={S.card}>
+          <div style={S.cHead}>🅿️ Parking-wise ({parkingDist.length} locations)</div>
+          <div style={{ maxHeight: 350, overflowY: "auto" }}>
+            <table style={S.table}>
+              <thead><tr>{["Parking", "Cars", "%"].map((h) => <th key={h} style={S.th}>{h}</th>)}</tr></thead>
+              <tbody>
+                {parkingDist.map((r) => (
+                  <tr key={r.parking} className="tr">
+                    <td style={{ ...S.td, fontWeight: 600 }}>{r.parking}</td>
+                    <td style={{ ...S.td, fontWeight: 700 }}>{r.count}</td>
+                    <td style={S.td}>{((r.count / totalCars) * 100).toFixed(1)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Sellable vs Non-sellable breakdown ──────────────────── */}
+      <div style={S.card}>
+        <div style={S.cHead}>🏷️ Sellable vs Non-Sellable Breakdown</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 16 }}>
+          <div style={{ ...S.card, padding: "16px", background: "#F0FDF4", border: "1px solid #BBF7D0", textAlign: "center" }}>
+            <div style={{ fontSize: 10, color: "#166534", textTransform: "uppercase", fontWeight: 700 }}>Sellable</div>
+            <div style={{ fontSize: 32, fontWeight: 900, color: "#16A34A", marginTop: 4 }}>{sellability.sellable.toLocaleString()}</div>
+            <div style={{ fontSize: 12, color: "#15803D" }}>{((sellability.sellable / totalCars) * 100).toFixed(1)}% of inventory</div>
+          </div>
+          <div style={{ ...S.card, padding: "16px", background: "#FEF2F2", border: "1px solid #FECACA", textAlign: "center" }}>
+            <div style={{ fontSize: 10, color: "#991B1B", textTransform: "uppercase", fontWeight: 700 }}>Non-Sellable</div>
+            <div style={{ fontSize: 32, fontWeight: 900, color: "#DC2626", marginTop: 4 }}>{sellability.nonSellable.toLocaleString()}</div>
+            <div style={{ fontSize: 12, color: "#B91C1C" }}>{((sellability.nonSellable / totalCars) * 100).toFixed(1)}% of inventory</div>
+          </div>
+          <div style={{ ...S.card, padding: "16px", background: "#FEF3C7", border: "1px solid #FDE68A", textAlign: "center" }}>
+            <div style={{ fontSize: 10, color: "#92400E", textTransform: "uppercase", fontWeight: 700 }}>Tesla Flagged</div>
+            <div style={{ fontSize: 32, fontWeight: 900, color: "#D97706", marginTop: 4 }}>{teslaCars.toLocaleString()}</div>
+            <div style={{ fontSize: 12, color: "#B45309" }}>{((teslaCars / totalCars) * 100).toFixed(1)}% of inventory</div>
+          </div>
+        </div>
+
+        {/* Non-sellable flag breakdown */}
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#0F172A", marginBottom: 10 }}>Non-sellable flag breakdown:</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+          {[
+            { label: "RI Pending", count: sellability.riPending, color: "#EF4444" },
+            { label: "Insp ↔ Parking Mismatch", count: sellability.inspMismatch, color: "#F97316" },
+            { label: "Auction Hold", count: sellability.auctionHold, color: "#F59E0B" },
+            { label: "Legal", count: sellability.legal, color: "#8B5CF6" },
+          ].map((f) => (
+            <div key={f.label} style={{ padding: "12px 14px", background: "#F8FAFC", borderRadius: 8, borderLeft: `3px solid ${f.color}` }}>
+              <div style={{ fontSize: 10, color: "#64748B", textTransform: "uppercase", fontWeight: 700 }}>{f.label}</div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: f.color, marginTop: 4 }}>{f.count}</div>
+              <div style={{ fontSize: 11, color: "#94A3B8" }}>{totalCars ? ((f.count / totalCars) * 100).toFixed(1) : 0}%</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 10, fontStyle: "italic" }}>
+          Note: A car may have multiple flags. Non-sellable count is de-duplicated (unique cars with ≥1 flag).
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════
+//  TAB 9 — SETTINGS
 // ═════════════════════════════════════════════════════════════════════
 function SettingsTab({ slackUrl, setSlackUrl, sheetUrl, setSheetUrl, managerEmail, setManagerEmail }) {
   const [slackTest, setSlackTest] = useState(null);
