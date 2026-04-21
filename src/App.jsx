@@ -30,6 +30,13 @@ const INR = (n) => {
 };
 const truthy = (v) => ["yes", "1", "true"].includes(String(v).toLowerCase());
 
+// Sort SI buckets by their leading number so "0-30" < "30-60" < "180+"
+const sortBuckets = (arr) => [...arr].sort((a, b) => {
+  const na = parseInt(String(a).match(/\d+/)?.[0] || "0", 10);
+  const nb = parseInt(String(b).match(/\d+/)?.[0] || "0", 10);
+  return na - nb;
+});
+
 // ── Approval Logic ───────────────────────────────────────────────────
 function evaluateQuote(bid, buyingPrice, ageBucket) {
   const pnl = bid - buyingPrice;
@@ -927,415 +934,431 @@ function HistoryTab({ history }) {
   );
 }
 
+
 // ═════════════════════════════════════════════════════════════════════
 //  TAB 4 — P&L MANAGEMENT
+//  ┌─────────────────────────────────────────────────────────────────┐
+//  │  Sections:                                                      │
+//  │  1. Bucket-wise Opening Inv & Sold (filterable: zone/channel/T) │
+//  │  2. SBND — Sold But Not Delivered pipeline                      │
+//  │  3. Same Month Cancelled (sold + SBND)                          │
+//  │  4. P&L Hit breakdown blocks                                    │
+//  └─────────────────────────────────────────────────────────────────┘
 // ═════════════════════════════════════════════════════════════════════
-function DashboardTab() {
-  const [period, setPeriod] = useState("MTD"); // "MTD" | "LMTD" | "custom"
+function PnlManagementTab() {
+  const [period, setPeriod] = useState("MTD"); // MTD | LMTD | custom
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [zone, setZone] = useState("ALL");
-  const [bv, setBv] = useState("ALL");
-  const [tesla, setTesla] = useState("ALL");
-  const [section, setSection] = useState("inventory"); // "inventory"|"sbnd"|"smc"|"pnlhit"
+  // Section 1 filters
+  const [zoneF, setZoneF] = useState("All");
+  const [channelF, setChannelF] = useState("All");
+  const [teslaF, setTeslaF] = useState("All");
+  // Which sub-section is expanded
+  const [section, setSection] = useState("inventory"); // inventory | sbnd | smc | pnlhit
 
-  const d = PNL_DATA;
+  const D = PNL_DATA;
   const p = period === "LMTD" ? "LMTD" : "MTD"; // custom falls back to MTD for now
 
-  // Aggregated totals for the current period
-  const invData = d.inventorySold[p];
-  const totals = useMemo(() => {
-    const rows = invData;
-    const openInv = rows.reduce((s, r) => s + r.openInv, 0);
-    const sold = rows.reduce((s, r) => s + r.sold, 0);
-    const pnl = rows.reduce((s, r) => s + r.soldPnL, 0);
-    const totalSoldBP = rows.reduce((s, r) => s + (r.soldAvgBP * r.sold), 0);
-    return { openInv, sold, pnl, avgLoss: sold ? pnl / sold : 0, avgBP: sold ? totalSoldBP / sold : 0 };
-  }, [invData]);
+  // ── Section 1: Aggregate bucket-wise data with filters ────────
+  const bucketRows = useMemo(() => {
+    let data = D.bucketWise[p] || [];
+    if (zoneF !== "All") data = data.filter((r) => r.zone === zoneF);
+    if (channelF !== "All") data = data.filter((r) => r.channel === channelF);
+    if (teslaF !== "All") data = data.filter((r) => String(r.tesla) === teslaF);
+    // Group by bucket
+    const map = {};
+    for (const r of data) {
+      if (!map[r.bucket]) map[r.bucket] = { bucket: r.bucket, openingInv: 0, openingBP: 0, soldCars: 0, soldBP: 0, pnl: 0 };
+      const m = map[r.bucket];
+      m.openingInv += r.openingInv;
+      m.openingBP += r.openingAvgBP * r.openingInv;
+      m.soldCars += r.soldCars;
+      m.soldBP += r.soldAvgBP * r.soldCars;
+      m.pnl += r.pnl;
+    }
+    return sortBuckets(Object.keys(map)).map((b) => {
+      const m = map[b];
+      m.openingAvgBP = m.openingInv ? Math.round(m.openingBP / m.openingInv) : 0;
+      m.soldAvgBP = m.soldCars ? Math.round(m.soldBP / m.soldCars) : 0;
+      m.pnlPct = m.soldBP ? (m.pnl / m.soldBP) * 100 : 0;
+      return m;
+    });
+  }, [D, p, zoneF, channelF, teslaF]);
 
-  const sbndData = d.sbnd[p];
-  const sbndTotal = sbndData.reduce((s, r) => s + r.count, 0);
+  const invTotals = useMemo(() => {
+    const t = { openingInv: 0, soldCars: 0, openingBP: 0, soldBP: 0, pnl: 0 };
+    for (const r of bucketRows) {
+      t.openingInv += r.openingInv; t.soldCars += r.soldCars;
+      t.openingBP += r.openingAvgBP * r.openingInv;
+      t.soldBP += r.soldAvgBP * r.soldCars;
+      t.pnl += r.pnl;
+    }
+    t.openingAvgBP = t.openingInv ? Math.round(t.openingBP / t.openingInv) : 0;
+    t.soldAvgBP = t.soldCars ? Math.round(t.soldBP / t.soldCars) : 0;
+    t.pnlPct = t.soldBP ? (t.pnl / t.soldBP) * 100 : 0;
+    return t;
+  }, [bucketRows]);
 
-  const smcData = d.smc[p];
-  const smcSoldTotal = smcData.sold.reduce((s, r) => s + r.count, 0);
-  const smcSoldPnL = smcData.sold.reduce((s, r) => s + r.pnl, 0);
-  const smcSBNDTotal = smcData.sbnd.reduce((s, r) => s + r.count, 0);
+  // ── Section 2: SBND ───────────────────────────────────────────
+  const sbndData = D.sbnd[p] || [];
+  const sbndTotal = useMemo(() => {
+    const t = { count: 0, bp: 0, bid: 0 };
+    for (const r of sbndData) { t.count += r.count; t.bp += r.avgBP * r.count; t.bid += r.avgDealerBid * r.count; }
+    t.avgBP = t.count ? Math.round(t.bp / t.count) : 0;
+    t.avgBid = t.count ? Math.round(t.bid / t.count) : 0;
+    return t;
+  }, [sbndData]);
 
-  const pnlHit = d.pnlHit[p];
-  const totalPnLHit = (pnlHit.soldCars.pnl) + (pnlHit.provisioned.provisionAmt) + (pnlHit.returnedCars.provisionAmt) + (pnlHit.smcSold.pnl) + (pnlHit.leadFeeRevenue.amount) + (pnlHit.ninetyPlusSoldReversal.amount);
+  // ── Section 3: SMC ────────────────────────────────────────────
+  const smcSold = D.smc[p]?.sold || [];
+  const smcSbnd = D.smc[p]?.sbnd || [];
 
-  const sectionTabs = [
+  // ── Section 4: P&L Hit ────────────────────────────────────────
+  const hit = D.pnlHit[p] || D.pnlHit.MTD;
+  const totalPnLHit = (hit.soldCars?.pnl || 0) + (hit.provisionedCars?.provisionAmt || 0) + (hit.returnedCars?.provisionAmt || 0) + (hit.smcSoldCars?.pnl || 0) + (hit.leadFeeRevenue?.amount || 0) + (hit.ninetyPlusSoldReversal?.reversalAmt || 0);
+
+  const sectionBtns = [
     { id: "inventory", icon: "📦", label: "Inventory & Sold" },
-    { id: "sbnd", icon: "🚚", label: "SBND Pipeline" },
+    { id: "sbnd", icon: "🚛", label: "SBND Pipeline" },
     { id: "smc", icon: "🔄", label: "Same Month Cancelled" },
     { id: "pnlhit", icon: "💰", label: "P&L Hit" },
   ];
 
-  const tbl = { borderCollapse: "collapse", width: "100%", fontSize: 13 };
-  const hdr = { ...S.th, position: "static" };
-  const cel = S.td;
-  const numR = { ...cel, textAlign: "right", fontVariantNumeric: "tabular-nums" };
-  const numRB = { ...numR, fontWeight: 700 };
-  const totRow = { background: "#F8FAFC", fontWeight: 800 };
-
   return (
     <div>
-      {/* ── Period Selector + Filters ───────────────────────────── */}
-      <div style={{ ...S.card, marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-          <div style={{ display: "flex", gap: 6 }}>
-            {["MTD", "LMTD", "Custom"].map((per) => (
-              <button key={per} onClick={() => setPeriod(per === "Custom" ? "custom" : per)} style={{
-                padding: "9px 20px", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
-                border: period === (per === "Custom" ? "custom" : per) ? "2px solid #3B82F6" : "2px solid #E2E8F0",
-                background: period === (per === "Custom" ? "custom" : per) ? "#EFF6FF" : "#FFF",
-                color: period === (per === "Custom" ? "custom" : per) ? "#1D4ED8" : "#64748B",
-              }}>{per}</button>
-            ))}
-            {period === "custom" && (
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: 8 }}>
-                <input type="date" style={S.sel} value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-                <span style={{ color: "#64748B" }}>to</span>
-                <input type="date" style={S.sel} value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-              </div>
-            )}
+      {/* ── Period selector ─────────────────────────────────────── */}
+      <div style={{ ...S.card, marginBottom: 16, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 6 }}>
+          {["MTD", "LMTD", "Custom"].map((pr) => (
+            <button key={pr} onClick={() => setPeriod(pr === "Custom" ? "custom" : pr)} style={{
+              padding: "9px 20px", borderRadius: 8,
+              border: period === (pr === "Custom" ? "custom" : pr) ? "2px solid #3B82F6" : "2px solid #E2E8F0",
+              background: period === (pr === "Custom" ? "custom" : pr) ? "#EFF6FF" : "#FFF",
+              color: period === (pr === "Custom" ? "custom" : pr) ? "#1D4ED8" : "#64748B",
+              fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+            }}>{pr}</button>
+          ))}
+        </div>
+        {period === "custom" && (
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input type="date" style={S.sel} value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+            <span style={{ color: "#64748B" }}>to</span>
+            <input type="date" style={S.sel} value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <select style={S.sel} value={zone} onChange={(e) => setZone(e.target.value)}>
-              <option value="ALL">📍 All Zones</option>
-              <option value="North">North</option>
-              <option value="South">South</option>
-            </select>
-            <select style={S.sel} value={bv} onChange={(e) => setBv(e.target.value)}>
-              <option value="ALL">🏷️ All BV</option>
-              <option value="C2D">C2D</option>
-              <option value="C2B">C2B</option>
-            </select>
-            <select style={S.sel} value={tesla} onChange={(e) => setTesla(e.target.value)}>
-              <option value="ALL">⚡ Tesla: All</option>
-              <option value="1">Tesla: 1</option>
-              <option value="0">Tesla: 0</option>
-            </select>
-          </div>
+        )}
+        <div style={{ marginLeft: "auto", padding: "8px 16px", background: "#FEF3C7", borderRadius: 8, fontSize: 12, color: "#78350F", fontWeight: 600 }}>
+          ⚠️ Showing dummy data — will connect to live query later
         </div>
       </div>
 
-      {/* ── Top-line KPI cards ──────────────────────────────────── */}
-      <div style={S.metrics}>
-        <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: "#3B82F6" }}>{totals.openInv.toLocaleString()}</div><div style={S.mLabel}>Opening Inventory</div></div>
-        <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: "#10B981" }}>{totals.sold.toLocaleString()}</div><div style={S.mLabel}>Cars Sold ({p})</div></div>
-        <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: "#EF4444" }}>{INR(totals.pnl)}</div><div style={S.mLabel}>Total P&L</div></div>
-        <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: "#EF4444" }}>{INR(totals.avgLoss)}</div><div style={S.mLabel}>Avg Loss/Car</div></div>
-        <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: "#F59E0B" }}>{sbndTotal}</div><div style={S.mLabel}>SBND Pipeline</div></div>
-        <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: totalPnLHit >= 0 ? "#10B981" : "#EF4444" }}>{INR(totalPnLHit)}</div><div style={S.mLabel}>Net P&L Hit</div></div>
-      </div>
-
-      {/* ── Section sub-tabs ────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 16, marginTop: 4 }}>
-        {sectionTabs.map((t) => (
-          <button key={t.id} onClick={() => setSection(t.id)} style={{
-            ...(section === t.id ? S.navActive : S.navBtn),
-            padding: "10px 18px",
-          }}>
-            <span style={{ marginRight: 6 }}>{t.icon}</span>{t.label}
-          </button>
+      {/* ── Section nav ─────────────────────────────────────────── */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
+        {sectionBtns.map((s) => (
+          <button key={s.id} onClick={() => setSection(s.id)} style={{
+            padding: "10px 18px", borderRadius: 8,
+            border: section === s.id ? "2px solid #3B82F6" : "1px solid #E2E8F0",
+            background: section === s.id ? "#EFF6FF" : "#FFF",
+            color: section === s.id ? "#1D4ED8" : "#64748B",
+            fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+          }}><span style={{ marginRight: 6 }}>{s.icon}</span>{s.label}</button>
         ))}
       </div>
 
-      {/* ════════════════════════════════════════════════════════════
-          SECTION 1: INVENTORY & SOLD
-         ════════════════════════════════════════════════════════════ */}
+      {/* ═══════ SECTION 1: Inventory & Sold ═══════ */}
       {section === "inventory" && (
-        <div style={S.card}>
-          <div style={S.cHead}>📦 Aging Bucket-wise Opening Inventory & Sold Cars ({p})</div>
-          <div style={{ overflowX: "auto" }}>
-            <table style={tbl}>
+        <div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+            <select style={S.sel} value={zoneF} onChange={(e) => setZoneF(e.target.value)}>
+              <option value="All">🌐 All Zones</option>
+              <option value="North">North</option>
+              <option value="South">South</option>
+            </select>
+            <select style={S.sel} value={channelF} onChange={(e) => setChannelF(e.target.value)}>
+              <option value="All">📡 All Channels</option>
+              <option value="C2D">C2D</option>
+              <option value="C2B">C2B</option>
+            </select>
+            <select style={S.sel} value={teslaF} onChange={(e) => setTeslaF(e.target.value)}>
+              <option value="All">⚡ Tesla: All</option>
+              <option value="1">Tesla Only</option>
+              <option value="0">Non-Tesla</option>
+            </select>
+            <span style={{ marginLeft: "auto", fontSize: 12, color: "#64748B", fontWeight: 600 }}>
+              Period: <b style={{ color: "#0F172A" }}>{period === "custom" ? `${dateFrom || "?"} → ${dateTo || "?"}` : period}</b>
+            </span>
+          </div>
+
+          {/* Summary cards */}
+          <div style={S.metrics}>
+            <div style={S.mCard}><div style={{ fontSize: 24, fontWeight: 900, color: "#3B82F6" }}>{invTotals.openingInv.toLocaleString()}</div><div style={S.mLabel}>Opening Inventory</div></div>
+            <div style={S.mCard}><div style={{ fontSize: 24, fontWeight: 900, color: "#10B981" }}>{invTotals.soldCars.toLocaleString()}</div><div style={S.mLabel}>Cars Sold</div></div>
+            <div style={S.mCard}><div style={{ fontSize: 24, fontWeight: 900, color: "#F59E0B" }}>{INR(invTotals.openingAvgBP)}</div><div style={S.mLabel}>Avg Opening BP</div></div>
+            <div style={S.mCard}><div style={{ fontSize: 24, fontWeight: 900, color: "#8B5CF6" }}>{INR(invTotals.soldAvgBP)}</div><div style={S.mLabel}>Avg Sold BP</div></div>
+            <div style={S.mCard}><div style={{ fontSize: 24, fontWeight: 900, color: invTotals.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(invTotals.pnl)}</div><div style={S.mLabel}>Total P&L</div></div>
+            <div style={S.mCard}><div style={{ fontSize: 24, fontWeight: 900, color: invTotals.pnlPct >= 0 ? "#10B981" : "#EF4444" }}>{invTotals.pnlPct.toFixed(1)}%</div><div style={S.mLabel}>P&L %</div></div>
+          </div>
+
+          {/* Table */}
+          <div style={S.tWrap}>
+            <table style={S.table}>
               <thead><tr>
-                <th style={hdr}>SI Bucket</th>
-                <th style={{ ...hdr, textAlign: "right" }}>Open Inv</th>
-                <th style={{ ...hdr, textAlign: "right" }}>Avg BP (Open)</th>
-                <th style={{ ...hdr, textAlign: "right" }}>Sold</th>
-                <th style={{ ...hdr, textAlign: "right" }}>Avg BP (Sold)</th>
-                <th style={{ ...hdr, textAlign: "right" }}>P&L</th>
-                <th style={{ ...hdr, textAlign: "right" }}>P&L %</th>
-                <th style={{ ...hdr, textAlign: "right" }}>Avg Loss/Car</th>
+                {["SI Bucket", "Opening Inv", "Opening Avg BP", "Sold Cars", "Sold Avg BP", "P&L", "P&L %"].map((h) => <th key={h} style={S.th}>{h}</th>)}
               </tr></thead>
               <tbody>
-                {invData.map((r) => {
-                  const avgLoss = r.sold ? r.soldPnL / r.sold : 0;
-                  return (
-                    <tr key={r.bucket} className="tr">
-                      <td style={cel}><span style={S.bucketChip}>{r.bucket}</span></td>
-                      <td style={numRB}>{r.openInv.toLocaleString()}</td>
-                      <td style={numR}>{INR(r.openAvgBP)}</td>
-                      <td style={numRB}>{r.sold.toLocaleString()}</td>
-                      <td style={numR}>{INR(r.soldAvgBP)}</td>
-                      <td style={{ ...numRB, color: r.soldPnL >= 0 ? "#10B981" : "#EF4444" }}>{INR(r.soldPnL)}</td>
-                      <td style={{ ...numR, color: r.soldPnLPct >= 0 ? "#10B981" : "#EF4444" }}>{r.soldPnLPct.toFixed(2)}%</td>
-                      <td style={{ ...numR, color: avgLoss >= 0 ? "#10B981" : "#EF4444" }}>{INR(avgLoss)}</td>
-                    </tr>
-                  );
-                })}
-                {/* Total row */}
-                <tr style={totRow}>
-                  <td style={{ ...cel, fontWeight: 800 }}>TOTAL</td>
-                  <td style={numRB}>{invData.reduce((s, r) => s + r.openInv, 0).toLocaleString()}</td>
-                  <td style={numR}>{INR(invData.reduce((s, r) => s + r.openAvgBP * r.openInv, 0) / Math.max(1, invData.reduce((s, r) => s + r.openInv, 0)))}</td>
-                  <td style={numRB}>{totals.sold.toLocaleString()}</td>
-                  <td style={numR}>{INR(totals.avgBP)}</td>
-                  <td style={{ ...numRB, color: totals.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(totals.pnl)}</td>
-                  <td style={{ ...numR, color: "#64748B" }}>—</td>
-                  <td style={{ ...numR, color: totals.avgLoss >= 0 ? "#10B981" : "#EF4444" }}>{INR(totals.avgLoss)}</td>
+                {bucketRows.map((r) => (
+                  <tr key={r.bucket} className="tr">
+                    <td style={S.td}><span style={S.bucketChip}>{r.bucket}</span></td>
+                    <td style={{ ...S.td, fontWeight: 700 }}>{r.openingInv.toLocaleString()}</td>
+                    <td style={{ ...S.td, fontVariantNumeric: "tabular-nums" }}>{INR(r.openingAvgBP)}</td>
+                    <td style={{ ...S.td, fontWeight: 700, color: "#10B981" }}>{r.soldCars.toLocaleString()}</td>
+                    <td style={{ ...S.td, fontVariantNumeric: "tabular-nums" }}>{INR(r.soldAvgBP)}</td>
+                    <td style={{ ...S.td, fontWeight: 700, color: r.pnl >= 0 ? "#10B981" : "#EF4444", fontVariantNumeric: "tabular-nums" }}>{INR(r.pnl)}</td>
+                    <td style={{ ...S.td, fontWeight: 700, color: r.pnlPct >= 0 ? "#10B981" : "#EF4444" }}>{r.pnlPct.toFixed(1)}%</td>
+                  </tr>
+                ))}
+                {/* Totals row */}
+                <tr style={{ background: "#F8FAFC" }}>
+                  <td style={{ ...S.td, fontWeight: 900, color: "#0F172A" }}>TOTAL</td>
+                  <td style={{ ...S.td, fontWeight: 900 }}>{invTotals.openingInv.toLocaleString()}</td>
+                  <td style={{ ...S.td, fontWeight: 900 }}>{INR(invTotals.openingAvgBP)}</td>
+                  <td style={{ ...S.td, fontWeight: 900, color: "#10B981" }}>{invTotals.soldCars.toLocaleString()}</td>
+                  <td style={{ ...S.td, fontWeight: 900 }}>{INR(invTotals.soldAvgBP)}</td>
+                  <td style={{ ...S.td, fontWeight: 900, color: invTotals.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(invTotals.pnl)}</td>
+                  <td style={{ ...S.td, fontWeight: 900, color: invTotals.pnlPct >= 0 ? "#10B981" : "#EF4444" }}>{invTotals.pnlPct.toFixed(1)}%</td>
                 </tr>
               </tbody>
             </table>
           </div>
-          {(zone !== "ALL" || bv !== "ALL" || tesla !== "ALL") && (
-            <div style={{ marginTop: 12, padding: "10px 14px", background: "#FEF3C7", borderRadius: 8, fontSize: 12, color: "#78350F" }}>
-              ⚠️ Filter applied: {zone !== "ALL" ? `Zone=${zone} ` : ""}{bv !== "ALL" ? `BV=${bv} ` : ""}{tesla !== "ALL" ? `Tesla=${tesla}` : ""}
-              — Filtered numbers will be live once data source is connected.
-            </div>
-          )}
         </div>
       )}
 
-      {/* ════════════════════════════════════════════════════════════
-          SECTION 2: SBND (Sold But Not Delivered)
-         ════════════════════════════════════════════════════════════ */}
+      {/* ═══════ SECTION 2: SBND ═══════ */}
       {section === "sbnd" && (
-        <div style={S.card}>
-          <div style={S.cHead}>🚚 SBND Pipeline — Sold But Not Delivered ({p})</div>
-          <div style={{ padding: "10px 14px", background: "#F0F9FF", borderRadius: 8, marginBottom: 16, fontSize: 13, color: "#0C4A6E" }}>
-            Cars with a verified dealer bid but not yet stocked out. This is the pipeline for upcoming deliveries/stock-outs.
+        <div>
+          <div style={S.metrics}>
+            <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: "#F59E0B" }}>{sbndTotal.count}</div><div style={S.mLabel}>Total SBND Cars</div></div>
+            <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: "#3B82F6" }}>{INR(sbndTotal.avgBP)}</div><div style={S.mLabel}>Avg Buying Price</div></div>
+            <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: "#8B5CF6" }}>{INR(sbndTotal.avgBid)}</div><div style={S.mLabel}>Avg Dealer Bid</div></div>
+            <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: "#EF4444" }}>{INR(sbndTotal.avgBid - sbndTotal.avgBP)}</div><div style={S.mLabel}>Avg P&L / Car</div></div>
           </div>
-          <table style={tbl}>
-            <thead><tr>
-              <th style={hdr}>SI Bucket</th>
-              <th style={{ ...hdr, textAlign: "right" }}>SBND Cars</th>
-              <th style={{ ...hdr, textAlign: "right" }}>Avg BP</th>
-              <th style={{ ...hdr, textAlign: "right" }}>Total BP Locked</th>
-              <th style={{ ...hdr, textAlign: "right" }}>% of Total SBND</th>
-            </tr></thead>
-            <tbody>
-              {sbndData.map((r) => (
-                <tr key={r.bucket} className="tr">
-                  <td style={cel}><span style={S.bucketChip}>{r.bucket}</span></td>
-                  <td style={numRB}>{r.count}</td>
-                  <td style={numR}>{INR(r.avgBP)}</td>
-                  <td style={numR}>{INR(r.avgBP * r.count)}</td>
-                  <td style={numR}>{sbndTotal ? ((r.count / sbndTotal) * 100).toFixed(1) : 0}%</td>
+          <div style={{ ...S.card, marginTop: 4 }}>
+            <div style={S.cHead}>🚛 SBND — Sold But Not Delivered (Stock-out Pipeline)</div>
+            <div style={{ color: "#64748B", fontSize: 13, marginBottom: 14 }}>
+              Cars with verified dealer bid, pending physical stock-out. Pipeline indicator for upcoming deliveries.
+            </div>
+            <table style={S.table}>
+              <thead><tr>
+                {["SI Bucket", "SBND Cars", "Avg Buying Price", "Avg Dealer Bid", "Δ (Bid − BP)", "Avg Days Since Sale"].map((h) => <th key={h} style={S.th}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {sbndData.map((r) => (
+                  <tr key={r.bucket} className="tr">
+                    <td style={S.td}><span style={S.bucketChip}>{r.bucket}</span></td>
+                    <td style={{ ...S.td, fontWeight: 800, fontSize: 16, color: "#0F172A" }}>{r.count}</td>
+                    <td style={{ ...S.td, fontVariantNumeric: "tabular-nums" }}>{INR(r.avgBP)}</td>
+                    <td style={{ ...S.td, fontVariantNumeric: "tabular-nums" }}>{INR(r.avgDealerBid)}</td>
+                    <td style={{ ...S.td, fontWeight: 700, color: (r.avgDealerBid - r.avgBP) >= 0 ? "#10B981" : "#EF4444", fontVariantNumeric: "tabular-nums" }}>
+                      {INR(r.avgDealerBid - r.avgBP)}
+                    </td>
+                    <td style={S.td}>{r.daysSinceSale.toFixed(1)} days</td>
+                  </tr>
+                ))}
+                <tr style={{ background: "#F8FAFC" }}>
+                  <td style={{ ...S.td, fontWeight: 900 }}>TOTAL</td>
+                  <td style={{ ...S.td, fontWeight: 900, fontSize: 16 }}>{sbndTotal.count}</td>
+                  <td style={{ ...S.td, fontWeight: 900 }}>{INR(sbndTotal.avgBP)}</td>
+                  <td style={{ ...S.td, fontWeight: 900 }}>{INR(sbndTotal.avgBid)}</td>
+                  <td style={{ ...S.td, fontWeight: 900, color: (sbndTotal.avgBid - sbndTotal.avgBP) >= 0 ? "#10B981" : "#EF4444" }}>{INR(sbndTotal.avgBid - sbndTotal.avgBP)}</td>
+                  <td style={S.td}>—</td>
                 </tr>
-              ))}
-              <tr style={totRow}>
-                <td style={{ ...cel, fontWeight: 800 }}>TOTAL</td>
-                <td style={numRB}>{sbndTotal}</td>
-                <td style={numR}>{INR(sbndData.reduce((s, r) => s + r.avgBP * r.count, 0) / Math.max(1, sbndTotal))}</td>
-                <td style={numRB}>{INR(sbndData.reduce((s, r) => s + r.avgBP * r.count, 0))}</td>
-                <td style={numR}>100%</td>
-              </tr>
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
-      {/* ════════════════════════════════════════════════════════════
-          SECTION 3: SAME MONTH CANCELLED (SMC)
-         ════════════════════════════════════════════════════════════ */}
+      {/* ═══════ SECTION 3: Same Month Cancelled ═══════ */}
       {section === "smc" && (
         <div>
-          <div style={{ ...S.card, marginBottom: 16 }}>
-            <div style={S.cHead}>🔄 Same Month Cancelled — Sold Cars ({p})</div>
-            <div style={{ padding: "10px 14px", background: "#FFF7ED", borderRadius: 8, marginBottom: 16, fontSize: 13, color: "#9A3412" }}>
-              Cars cancelled and re-sold within the same month. These incur additional handling and potential P&L impact.
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+            {/* SMC Sold */}
+            <div style={S.card}>
+              <div style={S.cHead}>🔄 SMC — Sold Cars</div>
+              <div style={{ color: "#64748B", fontSize: 13, marginBottom: 14 }}>Cars cancelled and re-sold within the same month</div>
+              <table style={S.table}>
+                <thead><tr>
+                  {["Bucket", "Cars", "Avg BP", "P&L", "P&L %"].map((h) => <th key={h} style={S.th}>{h}</th>)}
+                </tr></thead>
+                <tbody>
+                  {smcSold.map((r) => (
+                    <tr key={r.bucket} className="tr">
+                      <td style={S.td}><span style={S.bucketChip}>{r.bucket}</span></td>
+                      <td style={{ ...S.td, fontWeight: 700 }}>{r.count}</td>
+                      <td style={{ ...S.td, fontVariantNumeric: "tabular-nums" }}>{INR(r.avgBP)}</td>
+                      <td style={{ ...S.td, fontWeight: 700, color: r.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(r.pnl)}</td>
+                      <td style={{ ...S.td, color: r.pnlPct >= 0 ? "#10B981" : "#EF4444" }}>{r.pnlPct.toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                  <tr style={{ background: "#F8FAFC" }}>
+                    <td style={{ ...S.td, fontWeight: 900 }}>TOTAL</td>
+                    <td style={{ ...S.td, fontWeight: 900 }}>{smcSold.reduce((s, r) => s + r.count, 0)}</td>
+                    <td style={S.td}>—</td>
+                    <td style={{ ...S.td, fontWeight: 900, color: "#EF4444" }}>{INR(smcSold.reduce((s, r) => s + r.pnl, 0))}</td>
+                    <td style={S.td}>—</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
-            <table style={tbl}>
-              <thead><tr>
-                <th style={hdr}>SI Bucket</th>
-                <th style={{ ...hdr, textAlign: "right" }}>SMC Sold</th>
-                <th style={{ ...hdr, textAlign: "right" }}>Avg BP</th>
-                <th style={{ ...hdr, textAlign: "right" }}>P&L</th>
-                <th style={{ ...hdr, textAlign: "right" }}>Avg Loss/Car</th>
-              </tr></thead>
-              <tbody>
-                {smcData.sold.map((r) => (
-                  <tr key={r.bucket} className="tr">
-                    <td style={cel}><span style={S.bucketChip}>{r.bucket}</span></td>
-                    <td style={numRB}>{r.count}</td>
-                    <td style={numR}>{INR(r.avgBP)}</td>
-                    <td style={{ ...numRB, color: r.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(r.pnl)}</td>
-                    <td style={{ ...numR, color: "#EF4444" }}>{INR(r.count ? r.pnl / r.count : 0)}</td>
-                  </tr>
-                ))}
-                <tr style={totRow}>
-                  <td style={{ ...cel, fontWeight: 800 }}>TOTAL</td>
-                  <td style={numRB}>{smcSoldTotal}</td>
-                  <td style={numR}>—</td>
-                  <td style={{ ...numRB, color: smcSoldPnL >= 0 ? "#10B981" : "#EF4444" }}>{INR(smcSoldPnL)}</td>
-                  <td style={{ ...numR, color: "#EF4444" }}>{INR(smcSoldTotal ? smcSoldPnL / smcSoldTotal : 0)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
 
-          <div style={S.card}>
-            <div style={S.cHead}>🔄 Same Month Cancelled — SBND Cars ({p})</div>
-            <table style={tbl}>
-              <thead><tr>
-                <th style={hdr}>SI Bucket</th>
-                <th style={{ ...hdr, textAlign: "right" }}>SMC SBND</th>
-                <th style={{ ...hdr, textAlign: "right" }}>Avg BP</th>
-                <th style={{ ...hdr, textAlign: "right" }}>Total BP Locked</th>
-              </tr></thead>
-              <tbody>
-                {smcData.sbnd.map((r) => (
-                  <tr key={r.bucket} className="tr">
-                    <td style={cel}><span style={S.bucketChip}>{r.bucket}</span></td>
-                    <td style={numRB}>{r.count}</td>
-                    <td style={numR}>{INR(r.avgBP)}</td>
-                    <td style={numR}>{INR(r.avgBP * r.count)}</td>
+            {/* SMC SBND */}
+            <div style={S.card}>
+              <div style={S.cHead}>🔄 SMC — SBND Cars</div>
+              <div style={{ color: "#64748B", fontSize: 13, marginBottom: 14 }}>Same-month cancelled cars still in SBND (pending stock-out)</div>
+              <table style={S.table}>
+                <thead><tr>
+                  {["Bucket", "Cars", "Avg BP"].map((h) => <th key={h} style={S.th}>{h}</th>)}
+                </tr></thead>
+                <tbody>
+                  {smcSbnd.map((r) => (
+                    <tr key={r.bucket} className="tr">
+                      <td style={S.td}><span style={S.bucketChip}>{r.bucket}</span></td>
+                      <td style={{ ...S.td, fontWeight: 700 }}>{r.count}</td>
+                      <td style={{ ...S.td, fontVariantNumeric: "tabular-nums" }}>{INR(r.avgBP)}</td>
+                    </tr>
+                  ))}
+                  <tr style={{ background: "#F8FAFC" }}>
+                    <td style={{ ...S.td, fontWeight: 900 }}>TOTAL</td>
+                    <td style={{ ...S.td, fontWeight: 900 }}>{smcSbnd.reduce((s, r) => s + r.count, 0)}</td>
+                    <td style={S.td}>—</td>
                   </tr>
-                ))}
-                <tr style={totRow}>
-                  <td style={{ ...cel, fontWeight: 800 }}>TOTAL</td>
-                  <td style={numRB}>{smcSBNDTotal}</td>
-                  <td style={numR}>—</td>
-                  <td style={numRB}>{INR(smcData.sbnd.reduce((s, r) => s + r.avgBP * r.count, 0))}</td>
-                </tr>
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
 
-      {/* ════════════════════════════════════════════════════════════
-          SECTION 4: P&L HIT
-         ════════════════════════════════════════════════════════════ */}
+      {/* ═══════ SECTION 4: P&L Hit ═══════ */}
       {section === "pnlhit" && (
         <div>
-          {/* Net P&L Hit summary bar */}
-          <div style={{ ...S.card, marginBottom: 16, background: totalPnLHit >= 0 ? "#ECFDF5" : "#FEF2F2", border: totalPnLHit >= 0 ? "1px solid #A7F3D0" : "1px solid #FECACA" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div>
-                <div style={{ fontSize: 12, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 }}>Net P&L Hit ({p})</div>
-                <div style={{ fontSize: 32, fontWeight: 900, color: totalPnLHit >= 0 ? "#166534" : "#991B1B", marginTop: 4 }}>{INR(totalPnLHit)}</div>
-              </div>
-              <div style={{ fontSize: 13, color: "#64748B", textAlign: "right", lineHeight: 2 }}>
-                Sold P&L + Provision + Returns + SMC + Lead Fee + 90+ Reversal
-              </div>
+          {/* Total P&L Hit banner */}
+          <div style={{ ...S.card, marginBottom: 20, textAlign: "center", padding: 28 }}>
+            <div style={{ fontSize: 12, color: "#64748B", textTransform: "uppercase", letterSpacing: "2px", fontWeight: 700 }}>Net P&L Hit ({p})</div>
+            <div style={{ fontSize: 36, fontWeight: 900, color: totalPnLHit >= 0 ? "#10B981" : "#EF4444", letterSpacing: "-1px", marginTop: 4 }}>
+              {INR(totalPnLHit)}
+            </div>
+            <div style={{ fontSize: 13, color: "#64748B", marginTop: 8 }}>
+              = Sold P&L + Provision + Returns + SMC Sold + Lead Fee + 90+ Reversal
             </div>
           </div>
 
-          {/* P&L Component Blocks */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 16 }}>
-            {/* Sold Cars P&L */}
-            <div style={{ ...S.card, borderTop: "4px solid #EF4444" }}>
-              <div style={{ fontSize: 12, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 8 }}>Sold Cars P&L</div>
-              <div style={{ fontSize: 28, fontWeight: 900, color: "#EF4444" }}>{INR(pnlHit.soldCars.pnl)}</div>
-              <div style={{ fontSize: 14, color: "#0F172A", marginTop: 8 }}>
-                <b>{pnlHit.soldCars.count}</b> cars sold this month
-              </div>
-              <div style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>
-                Avg loss: {INR(pnlHit.soldCars.count ? pnlHit.soldCars.pnl / pnlHit.soldCars.count : 0)}/car
+          {/* P&L component blocks */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+            {/* Sold Cars */}
+            <div style={{ ...S.card, borderTop: "3px solid #EF4444" }}>
+              <div style={{ fontSize: 11, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 }}>Sold Cars P&L</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: "#EF4444", marginTop: 8 }}>{INR(hit.soldCars.pnl)}</div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, padding: "10px 0", borderTop: "1px solid #F1F5F9" }}>
+                <div><div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>Cars Sold</div><div style={{ fontSize: 18, fontWeight: 800, color: "#0F172A" }}>{hit.soldCars.count}</div></div>
+                <div><div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>Avg Loss/Car</div><div style={{ fontSize: 18, fontWeight: 800, color: "#EF4444" }}>{INR(hit.soldCars.avgLoss)}</div></div>
               </div>
             </div>
 
             {/* Provisioned Cars */}
-            <div style={{ ...S.card, borderTop: "4px solid #F59E0B" }}>
-              <div style={{ fontSize: 12, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 8 }}>Provisioned Amount</div>
-              <div style={{ fontSize: 28, fontWeight: 900, color: "#F59E0B" }}>{INR(pnlHit.provisioned.provisionAmt)}</div>
-              <div style={{ fontSize: 14, color: "#0F172A", marginTop: 8 }}>
-                <b>{pnlHit.provisioned.count}</b> cars under provision
+            <div style={{ ...S.card, borderTop: "3px solid #F59E0B" }}>
+              <div style={{ fontSize: 11, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 }}>Provision Amount</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: "#F59E0B", marginTop: 8 }}>{INR(hit.provisionedCars.provisionAmt)}</div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, padding: "10px 0", borderTop: "1px solid #F1F5F9" }}>
+                <div><div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>Provisioned Cars</div><div style={{ fontSize: 18, fontWeight: 800, color: "#0F172A" }}>{hit.provisionedCars.count}</div></div>
+                <div style={{ textAlign: "right" }}><div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>Per Car</div><div style={{ fontSize: 18, fontWeight: 800, color: "#F59E0B" }}>{INR(hit.provisionedCars.count ? hit.provisionedCars.provisionAmt / hit.provisionedCars.count : 0)}</div></div>
               </div>
-              <div style={{ fontSize: 12, color: "#78350F", marginTop: 4, background: "#FEF3C7", padding: "4px 8px", borderRadius: 4, display: "inline-block" }}>
-                ↓ Reduces as cars sell
+              <div style={{ fontSize: 11, color: "#92400E", background: "#FEF3C7", padding: "6px 10px", borderRadius: 6, marginTop: 8 }}>
+                Reduces as cars get sold from inventory
               </div>
             </div>
 
             {/* Returned Cars */}
-            <div style={{ ...S.card, borderTop: "4px solid #8B5CF6" }}>
-              <div style={{ fontSize: 12, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 8 }}>Returned Cars Provision</div>
-              <div style={{ fontSize: 28, fontWeight: 900, color: "#8B5CF6" }}>{INR(pnlHit.returnedCars.provisionAmt)}</div>
-              <div style={{ fontSize: 14, color: "#0F172A", marginTop: 8 }}>
-                <b>{pnlHit.returnedCars.count}</b> cars returned
+            <div style={{ ...S.card, borderTop: "3px solid #8B5CF6" }}>
+              <div style={{ fontSize: 11, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 }}>Returned Cars Provision</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: "#8B5CF6", marginTop: 8 }}>{INR(hit.returnedCars.provisionAmt)}</div>
+              <div style={{ marginTop: 12, padding: "10px 0", borderTop: "1px solid #F1F5F9" }}>
+                <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>Returned Cars</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: "#0F172A" }}>{hit.returnedCars.count}</div>
               </div>
             </div>
-          </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
-            {/* SMC P&L */}
-            <div style={{ ...S.card, borderTop: "4px solid #EC4899" }}>
-              <div style={{ fontSize: 12, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 8 }}>Same Month Sold P&L</div>
-              <div style={{ fontSize: 28, fontWeight: 900, color: "#EC4899" }}>{INR(pnlHit.smcSold.pnl)}</div>
-              <div style={{ fontSize: 14, color: "#0F172A", marginTop: 8 }}>
-                <b>{pnlHit.smcSold.count}</b> SMC sold + <b>{pnlHit.smcSBND.count}</b> SMC SBND
+            {/* SMC Sold */}
+            <div style={{ ...S.card, borderTop: "3px solid #EC4899" }}>
+              <div style={{ fontSize: 11, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 }}>Same Month Sold P&L</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: "#EC4899", marginTop: 8 }}>{INR(hit.smcSoldCars.pnl)}</div>
+              <div style={{ marginTop: 12, padding: "10px 0", borderTop: "1px solid #F1F5F9" }}>
+                <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>SMC Sold Cars</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: "#0F172A" }}>{hit.smcSoldCars.count}</div>
               </div>
             </div>
 
             {/* Lead Fee Revenue */}
-            <div style={{ ...S.card, borderTop: "4px solid #10B981" }}>
-              <div style={{ fontSize: 12, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 8 }}>Lead Fee Revenue</div>
-              <div style={{ fontSize: 28, fontWeight: 900, color: "#10B981" }}>+{INR(pnlHit.leadFeeRevenue.amount)}</div>
-              <div style={{ fontSize: 12, color: "#065F46", marginTop: 8, background: "#ECFDF5", padding: "4px 8px", borderRadius: 4, display: "inline-block" }}>
-                Offsets P&L losses
+            <div style={{ ...S.card, borderTop: "3px solid #10B981" }}>
+              <div style={{ fontSize: 11, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 }}>Lead Fee Revenue</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: "#10B981", marginTop: 8 }}>{INR(hit.leadFeeRevenue.amount)}</div>
+              <div style={{ fontSize: 11, color: "#065F46", background: "#DCFCE7", padding: "6px 10px", borderRadius: 6, marginTop: 12 }}>
+                Revenue offset — reduces net P&L hit
               </div>
             </div>
 
             {/* 90+ Sold Reversal */}
-            <div style={{ ...S.card, borderTop: "4px solid #06B6D4" }}>
-              <div style={{ fontSize: 12, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 8 }}>90+ Sold Reversal</div>
-              <div style={{ fontSize: 28, fontWeight: 900, color: "#06B6D4" }}>+{INR(pnlHit.ninetyPlusSoldReversal.amount)}</div>
-              <div style={{ fontSize: 14, color: "#0F172A", marginTop: 8 }}>
-                <b>{pnlHit.ninetyPlusSoldReversal.count}</b> cars — provision reversed on sale
+            <div style={{ ...S.card, borderTop: "3px solid #06B6D4" }}>
+              <div style={{ fontSize: 11, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 }}>90+ Day Sold Reversal</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: "#06B6D4", marginTop: 8 }}>{INR(hit.ninetyPlusSoldReversal.reversalAmt)}</div>
+              <div style={{ marginTop: 12, padding: "10px 0", borderTop: "1px solid #F1F5F9" }}>
+                <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>Cars Reversed</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: "#0F172A" }}>{hit.ninetyPlusSoldReversal.count}</div>
               </div>
             </div>
           </div>
 
-          {/* Waterfall summary */}
-          <div style={{ ...S.card, marginTop: 16 }}>
-            <div style={S.cHead}>📊 P&L Waterfall ({p})</div>
-            <table style={tbl}>
+          {/* P&L Waterfall summary */}
+          <div style={{ ...S.card, marginTop: 20 }}>
+            <div style={S.cHead}>📊 P&L Waterfall</div>
+            <table style={S.table}>
               <thead><tr>
-                <th style={hdr}>Component</th>
-                <th style={{ ...hdr, textAlign: "right" }}>Cars</th>
-                <th style={{ ...hdr, textAlign: "right" }}>Amount</th>
-                <th style={{ ...hdr, textAlign: "right" }}>Impact</th>
+                {["Component", "Cars", "Amount", "Direction"].map((h) => <th key={h} style={S.th}>{h}</th>)}
               </tr></thead>
               <tbody>
                 {[
-                  { label: "Sold Cars P&L", cars: pnlHit.soldCars.count, amount: pnlHit.soldCars.pnl, impact: "negative" },
-                  { label: "Provisioned Cars", cars: pnlHit.provisioned.count, amount: pnlHit.provisioned.provisionAmt, impact: "negative" },
-                  { label: "Returned Cars Provision", cars: pnlHit.returnedCars.count, amount: pnlHit.returnedCars.provisionAmt, impact: "negative" },
-                  { label: "Same Month Sold P&L", cars: pnlHit.smcSold.count, amount: pnlHit.smcSold.pnl, impact: "negative" },
-                  { label: "Lead Fee Revenue", cars: "—", amount: pnlHit.leadFeeRevenue.amount, impact: "positive" },
-                  { label: "90+ Sold Reversal", cars: pnlHit.ninetyPlusSoldReversal.count, amount: pnlHit.ninetyPlusSoldReversal.amount, impact: "positive" },
-                ].map((row, i) => (
-                  <tr key={i} className="tr">
-                    <td style={{ ...cel, fontWeight: 600 }}>{row.label}</td>
-                    <td style={numR}>{typeof row.cars === "number" ? row.cars.toLocaleString() : row.cars}</td>
-                    <td style={{ ...numRB, color: row.impact === "positive" ? "#10B981" : "#EF4444" }}>
-                      {row.impact === "positive" ? "+" : ""}{INR(row.amount)}
+                  { label: "Sold Cars P&L", count: hit.soldCars.count, amt: hit.soldCars.pnl, dir: "loss" },
+                  { label: "Provision Amount", count: hit.provisionedCars.count, amt: hit.provisionedCars.provisionAmt, dir: "loss" },
+                  { label: "Returned Cars Provision", count: hit.returnedCars.count, amt: hit.returnedCars.provisionAmt, dir: "loss" },
+                  { label: "SMC Sold P&L", count: hit.smcSoldCars.count, amt: hit.smcSoldCars.pnl, dir: "loss" },
+                  { label: "Lead Fee Revenue", count: null, amt: hit.leadFeeRevenue.amount, dir: "gain" },
+                  { label: "90+ Sold Reversal", count: hit.ninetyPlusSoldReversal.count, amt: hit.ninetyPlusSoldReversal.reversalAmt, dir: "gain" },
+                ].map((row) => (
+                  <tr key={row.label} className="tr">
+                    <td style={{ ...S.td, fontWeight: 600 }}>{row.label}</td>
+                    <td style={S.td}>{row.count != null ? row.count : "—"}</td>
+                    <td style={{ ...S.td, fontWeight: 800, color: row.dir === "gain" ? "#10B981" : "#EF4444", fontVariantNumeric: "tabular-nums" }}>
+                      {row.dir === "gain" ? "+" : ""}{INR(row.amt)}
                     </td>
-                    <td style={{ ...numR, color: row.impact === "positive" ? "#10B981" : "#EF4444" }}>
-                      {row.impact === "positive" ? "▲" : "▼"}
+                    <td style={S.td}>
+                      <span style={{
+                        display: "inline-block", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+                        background: row.dir === "gain" ? "#DCFCE7" : "#FEE2E2",
+                        color: row.dir === "gain" ? "#166534" : "#991B1B",
+                      }}>{row.dir === "gain" ? "▲ Revenue/Reversal" : "▼ Loss"}</span>
                     </td>
                   </tr>
                 ))}
-                <tr style={{ ...totRow, borderTop: "2px solid #0F172A" }}>
-                  <td style={{ ...cel, fontWeight: 900, fontSize: 14 }}>NET P&L HIT</td>
-                  <td style={numR}>—</td>
-                  <td style={{ ...numRB, fontSize: 16, color: totalPnLHit >= 0 ? "#10B981" : "#EF4444" }}>{INR(totalPnLHit)}</td>
-                  <td style={numR}>{totalPnLHit >= 0 ? "▲" : "▼"}</td>
+                <tr style={{ background: "#F8FAFC" }}>
+                  <td style={{ ...S.td, fontWeight: 900, fontSize: 15 }}>NET P&L HIT</td>
+                  <td style={S.td}>—</td>
+                  <td style={{ ...S.td, fontWeight: 900, fontSize: 18, color: totalPnLHit >= 0 ? "#10B981" : "#EF4444" }}>{INR(totalPnLHit)}</td>
+                  <td style={S.td}></td>
                 </tr>
               </tbody>
             </table>
           </div>
         </div>
       )}
-
-      {/* Dummy data notice */}
-      <div style={{ marginTop: 20, padding: "10px 14px", background: "#FEF3C7", borderRadius: 8, fontSize: 12, color: "#78350F" }}>
-        ⚠️ All numbers are currently dummy/fixed. Will be connected to live data via query or sheet import.
-      </div>
     </div>
   );
 }
@@ -1351,11 +1374,6 @@ function DashboardTab() {
 // ═════════════════════════════════════════════════════════════════════
 const SLOT_NAMES = ["A", "B", "C", "D", "E", "F", "G", "H"];
 const CANONICAL_BUCKETS = ["0-30", "30-60", "60-90", "90-120", "120-150", "150-180", "180+"];
-const sortBuckets = (arr) => [...arr].sort((a, b) => {
-  const na = parseInt(String(a).match(/\d+/)?.[0] || "0", 10);
-  const nb = parseInt(String(b).match(/\d+/)?.[0] || "0", 10);
-  return na - nb;
-});
 
 // Generate 30-min windows from 9:30 to 19:30
 const generateTimeSlots = (numSlots) => {
@@ -2222,3 +2240,4 @@ const CSS = `
   input:focus,textarea:focus,select:focus{border-color:#3B82F6!important;box-shadow:0 0 0 3px #3B82F620}
   button:disabled{opacity:.4;cursor:not-allowed}
   @media(max-width:1100px){.ql{grid-template-columns:1fr!important}}
+`;
