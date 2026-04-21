@@ -9,7 +9,7 @@ import * as XLSX from "xlsx";
                            click App ID → full details modal
      2. Quote Submission — submit quote, auto-approve logic, escalation, Start Auction button
      3. Quote History    — filterable log of all quotes (member, date, bucket, region)
-     4. Sold Dashboard   — P&L, cars sold by bucket, avg loss/car (dummy data)
+     4. P&L Management — Inventory/Sold, SBND, SMC, P&L Hit waterfall
      5. Auction Console  — run bulk auctions by filter (anchor, bucket, SMC, stop, region, C2D/C2B)
      6. Settings         — Slack + Google Sheet
    ═══════════════════════════════════════════════════════════════════════ */
@@ -117,21 +117,130 @@ const DETAIL_GROUPS = [
   },
 ];
 
-// Dummy dashboard data
-const DUMMY_DASH = {
-  totalSold: 1247,
-  totalPnL: -18_50_000,
-  avgLossPerCar: -1484,
-  byBucket: [
-    { bucket: "0-30", sold: 612, pnl: -2_80_000, avgLoss: -457 },
-    { bucket: "30-60", sold: 348, pnl: -4_20_000, avgLoss: -1207 },
-    { bucket: "60-90", sold: 201, pnl: -6_50_000, avgLoss: -3234 },
-    { bucket: "90+", sold: 86, pnl: -5_00_000, avgLoss: -5814 },
-  ],
-  byChannel: [
-    { channel: "C2D", sold: 834, pnl: -8_20_000 },
-    { channel: "C2B", sold: 413, pnl: -10_30_000 },
-  ],
+// ═════════════════════════════════════════════════════════════════════
+//  P&L MANAGEMENT — DUMMY DATA
+//  Structured to mirror actual Cars24 stuck-inventory ops metrics.
+//  Replace with API/query calls later.
+// ═════════════════════════════════════════════════════════════════════
+const PNL_DATA = {
+  // ── 1. Bucket-wise Inventory & Sold (MTD & LMTD) ──────────────
+  // Each bucket has: opening inventory, sold cars, avg BP (opening & sold), P&L, P&L%
+  // Filterable by zone, channel, tesla flag
+  bucketWise: {
+    MTD: [
+      { bucket: "0-30",    zone: "North", channel: "C2B", tesla: 0, openingInv: 180, openingAvgBP: 285000, soldCars: 72, soldAvgBP: 278000, soldRevenue: 27200 * 72, pnl: -3_10_000, pnlPct: -1.55 },
+      { bucket: "0-30",    zone: "North", channel: "C2D", tesla: 0, openingInv: 95,  openingAvgBP: 310000, soldCars: 41, soldAvgBP: 305000, soldRevenue: 0, pnl: -1_80_000, pnlPct: -1.42 },
+      { bucket: "0-30",    zone: "South", channel: "C2B", tesla: 0, openingInv: 160, openingAvgBP: 265000, soldCars: 68, soldAvgBP: 260000, soldRevenue: 0, pnl: -2_45_000, pnlPct: -1.38 },
+      { bucket: "0-30",    zone: "South", channel: "C2D", tesla: 0, openingInv: 78,  openingAvgBP: 295000, soldCars: 32, soldAvgBP: 290000, soldRevenue: 0, pnl: -1_50_000, pnlPct: -1.60 },
+      { bucket: "0-30",    zone: "North", channel: "C2B", tesla: 1, openingInv: 22,  openingAvgBP: 450000, soldCars: 8,  soldAvgBP: 440000, soldRevenue: 0, pnl: -95_000,  pnlPct: -2.70 },
+      { bucket: "0-30",    zone: "South", channel: "C2B", tesla: 1, openingInv: 15,  openingAvgBP: 420000, soldCars: 5,  soldAvgBP: 415000, soldRevenue: 0, pnl: -60_000,  pnlPct: -2.90 },
+
+      { bucket: "30-60",   zone: "North", channel: "C2B", tesla: 0, openingInv: 140, openingAvgBP: 295000, soldCars: 52, soldAvgBP: 282000, soldRevenue: 0, pnl: -5_80_000, pnlPct: -3.80 },
+      { bucket: "30-60",   zone: "North", channel: "C2D", tesla: 0, openingInv: 68,  openingAvgBP: 320000, soldCars: 28, soldAvgBP: 308000, soldRevenue: 0, pnl: -3_20_000, pnlPct: -3.68 },
+      { bucket: "30-60",   zone: "South", channel: "C2B", tesla: 0, openingInv: 120, openingAvgBP: 275000, soldCars: 45, soldAvgBP: 265000, soldRevenue: 0, pnl: -4_30_000, pnlPct: -3.60 },
+      { bucket: "30-60",   zone: "South", channel: "C2D", tesla: 0, openingInv: 55,  openingAvgBP: 305000, soldCars: 22, soldAvgBP: 292000, soldRevenue: 0, pnl: -2_70_000, pnlPct: -3.96 },
+      { bucket: "30-60",   zone: "North", channel: "C2B", tesla: 1, openingInv: 18,  openingAvgBP: 460000, soldCars: 6,  soldAvgBP: 435000, soldRevenue: 0, pnl: -1_65_000, pnlPct: -6.32 },
+
+      { bucket: "60-90",   zone: "North", channel: "C2B", tesla: 0, openingInv: 95,  openingAvgBP: 310000, soldCars: 32, soldAvgBP: 285000, soldRevenue: 0, pnl: -7_20_000, pnlPct: -7.25 },
+      { bucket: "60-90",   zone: "North", channel: "C2D", tesla: 0, openingInv: 42,  openingAvgBP: 335000, soldCars: 15, soldAvgBP: 310000, soldRevenue: 0, pnl: -3_40_000, pnlPct: -6.80 },
+      { bucket: "60-90",   zone: "South", channel: "C2B", tesla: 0, openingInv: 80,  openingAvgBP: 290000, soldCars: 28, soldAvgBP: 268000, soldRevenue: 0, pnl: -5_80_000, pnlPct: -7.40 },
+      { bucket: "60-90",   zone: "South", channel: "C2D", tesla: 0, openingInv: 35,  openingAvgBP: 315000, soldCars: 12, soldAvgBP: 290000, soldRevenue: 0, pnl: -2_85_000, pnlPct: -7.75 },
+
+      { bucket: "90-120",  zone: "North", channel: "C2B", tesla: 0, openingInv: 55,  openingAvgBP: 325000, soldCars: 18, soldAvgBP: 280000, soldRevenue: 0, pnl: -7_50_000, pnlPct: -13.0 },
+      { bucket: "90-120",  zone: "South", channel: "C2B", tesla: 0, openingInv: 40,  openingAvgBP: 305000, soldCars: 12, soldAvgBP: 265000, soldRevenue: 0, pnl: -4_50_000, pnlPct: -12.2 },
+      { bucket: "90-120",  zone: "North", channel: "C2D", tesla: 0, openingInv: 22,  openingAvgBP: 340000, soldCars: 8,  soldAvgBP: 295000, soldRevenue: 0, pnl: -3_20_000, pnlPct: -13.5 },
+
+      { bucket: "120-150", zone: "North", channel: "C2B", tesla: 0, openingInv: 30,  openingAvgBP: 340000, soldCars: 10, soldAvgBP: 275000, soldRevenue: 0, pnl: -6_10_000, pnlPct: -18.4 },
+      { bucket: "120-150", zone: "South", channel: "C2B", tesla: 0, openingInv: 22,  openingAvgBP: 320000, soldCars: 7,  soldAvgBP: 262000, soldRevenue: 0, pnl: -3_80_000, pnlPct: -17.8 },
+
+      { bucket: "150-180", zone: "North", channel: "C2B", tesla: 0, openingInv: 18,  openingAvgBP: 355000, soldCars: 5,  soldAvgBP: 270000, soldRevenue: 0, pnl: -4_00_000, pnlPct: -23.6 },
+      { bucket: "150-180", zone: "South", channel: "C2B", tesla: 0, openingInv: 12,  openingAvgBP: 330000, soldCars: 3,  soldAvgBP: 255000, soldRevenue: 0, pnl: -2_10_000, pnlPct: -22.4 },
+
+      { bucket: "180+",    zone: "North", channel: "C2B", tesla: 0, openingInv: 25,  openingAvgBP: 380000, soldCars: 4,  soldAvgBP: 260000, soldRevenue: 0, pnl: -4_50_000, pnlPct: -29.0 },
+      { bucket: "180+",    zone: "South", channel: "C2B", tesla: 0, openingInv: 18,  openingAvgBP: 350000, soldCars: 3,  soldAvgBP: 248000, soldRevenue: 0, pnl: -2_85_000, pnlPct: -27.2 },
+    ],
+    LMTD: [
+      { bucket: "0-30",    zone: "North", channel: "C2B", tesla: 0, openingInv: 195, openingAvgBP: 280000, soldCars: 78, soldAvgBP: 275000, soldRevenue: 0, pnl: -2_80_000, pnlPct: -1.30 },
+      { bucket: "0-30",    zone: "South", channel: "C2B", tesla: 0, openingInv: 170, openingAvgBP: 260000, soldCars: 72, soldAvgBP: 257000, soldRevenue: 0, pnl: -2_10_000, pnlPct: -1.14 },
+      { bucket: "30-60",   zone: "North", channel: "C2B", tesla: 0, openingInv: 155, openingAvgBP: 290000, soldCars: 58, soldAvgBP: 280000, soldRevenue: 0, pnl: -5_20_000, pnlPct: -3.20 },
+      { bucket: "30-60",   zone: "South", channel: "C2B", tesla: 0, openingInv: 130, openingAvgBP: 270000, soldCars: 48, soldAvgBP: 262000, soldRevenue: 0, pnl: -3_60_000, pnlPct: -2.85 },
+      { bucket: "60-90",   zone: "North", channel: "C2B", tesla: 0, openingInv: 100, openingAvgBP: 305000, soldCars: 35, soldAvgBP: 282000, soldRevenue: 0, pnl: -6_80_000, pnlPct: -6.32 },
+      { bucket: "60-90",   zone: "South", channel: "C2B", tesla: 0, openingInv: 85,  openingAvgBP: 285000, soldCars: 30, soldAvgBP: 265000, soldRevenue: 0, pnl: -5_40_000, pnlPct: -6.45 },
+      { bucket: "90+",     zone: "North", channel: "C2B", tesla: 0, openingInv: 80,  openingAvgBP: 340000, soldCars: 22, soldAvgBP: 280000, soldRevenue: 0, pnl: -12_00_000,pnlPct: -15.4 },
+      { bucket: "90+",     zone: "South", channel: "C2B", tesla: 0, openingInv: 60,  openingAvgBP: 320000, soldCars: 16, soldAvgBP: 268000, soldRevenue: 0, pnl: -7_80_000, pnlPct: -14.8 },
+    ],
+  },
+
+  // ── 2. SBND (Sold But Not Delivered) ───────────────────────────
+  sbnd: {
+    MTD: [
+      { bucket: "0-30",    count: 45, avgBP: 282000, avgDealerBid: 276000, daysSinceSale: 3.2 },
+      { bucket: "30-60",   count: 32, avgBP: 290000, avgDealerBid: 278000, daysSinceSale: 4.8 },
+      { bucket: "60-90",   count: 22, avgBP: 305000, avgDealerBid: 282000, daysSinceSale: 6.1 },
+      { bucket: "90-120",  count: 14, avgBP: 320000, avgDealerBid: 280000, daysSinceSale: 8.5 },
+      { bucket: "120-150", count: 8,  avgBP: 335000, avgDealerBid: 275000, daysSinceSale: 10.2 },
+      { bucket: "150-180", count: 5,  avgBP: 350000, avgDealerBid: 270000, daysSinceSale: 12.0 },
+      { bucket: "180+",    count: 3,  avgBP: 375000, avgDealerBid: 260000, daysSinceSale: 15.4 },
+    ],
+    LMTD: [
+      { bucket: "0-30",    count: 52, avgBP: 278000, avgDealerBid: 273000, daysSinceSale: 2.8 },
+      { bucket: "30-60",   count: 38, avgBP: 285000, avgDealerBid: 274000, daysSinceSale: 4.2 },
+      { bucket: "60-90",   count: 25, avgBP: 298000, avgDealerBid: 278000, daysSinceSale: 5.5 },
+      { bucket: "90+",     count: 18, avgBP: 330000, avgDealerBid: 278000, daysSinceSale: 9.8 },
+    ],
+  },
+
+  // ── 3. Same Month Cancelled (SMC) — sold + SBND ───────────────
+  smc: {
+    MTD: {
+      sold: [
+        { bucket: "0-30",  count: 28, avgBP: 275000, pnl: -1_40_000, pnlPct: -1.82 },
+        { bucket: "30-60", count: 18, avgBP: 288000, pnl: -1_80_000, pnlPct: -3.47 },
+        { bucket: "60-90", count: 12, avgBP: 305000, pnl: -2_10_000, pnlPct: -5.74 },
+        { bucket: "90+",   count: 6,  avgBP: 340000, pnl: -1_80_000, pnlPct: -8.82 },
+      ],
+      sbnd: [
+        { bucket: "0-30",  count: 15, avgBP: 280000 },
+        { bucket: "30-60", count: 10, avgBP: 292000 },
+        { bucket: "60-90", count: 6,  avgBP: 310000 },
+        { bucket: "90+",   count: 3,  avgBP: 345000 },
+      ],
+    },
+    LMTD: {
+      sold: [
+        { bucket: "0-30",  count: 32, avgBP: 270000, pnl: -1_20_000, pnlPct: -1.38 },
+        { bucket: "30-60", count: 20, avgBP: 282000, pnl: -1_50_000, pnlPct: -2.66 },
+        { bucket: "60-90", count: 14, avgBP: 300000, pnl: -1_95_000, pnlPct: -4.64 },
+        { bucket: "90+",   count: 8,  avgBP: 335000, pnl: -2_10_000, pnlPct: -7.84 },
+      ],
+      sbnd: [
+        { bucket: "0-30",  count: 18, avgBP: 275000 },
+        { bucket: "30-60", count: 12, avgBP: 285000 },
+        { bucket: "60-90", count: 8,  avgBP: 302000 },
+        { bucket: "90+",   count: 4,  avgBP: 338000 },
+      ],
+    },
+  },
+
+  // ── 4. P&L Hit Block ───────────────────────────────────────────
+  pnlHit: {
+    MTD: {
+      soldCars:          { count: 486, pnl: -52_00_000,  avgLoss: -10700 },
+      provisionedCars:   { count: 142, provisionAmt: -38_00_000, note: "Reduces as cars sell" },
+      returnedCars:      { count: 18,  provisionAmt: -4_50_000 },
+      smcSoldCars:       { count: 64,  pnl: -7_10_000 },
+      leadFeeRevenue:    { amount: 12_50_000 },
+      ninetyPlusSoldReversal: { count: 28, reversalAmt: 8_20_000 },
+    },
+    LMTD: {
+      soldCars:          { count: 520, pnl: -48_00_000,  avgLoss: -9230 },
+      provisionedCars:   { count: 165, provisionAmt: -42_00_000, note: "Reduces as cars sell" },
+      returnedCars:      { count: 22,  provisionAmt: -5_20_000 },
+      smcSoldCars:       { count: 74,  pnl: -6_75_000 },
+      leadFeeRevenue:    { amount: 14_00_000 },
+      ninetyPlusSoldReversal: { count: 32, reversalAmt: 9_50_000 },
+    },
+  },
 };
 
 // ═════════════════════════════════════════════════════════════════════
@@ -184,7 +293,7 @@ export default function App() {
     { id: "inventory", icon: "📋", label: "Stuck Inventory" },
     { id: "quotes", icon: "💰", label: "Submit Quote", badge: pendingEsc || null },
     { id: "history", icon: "📜", label: "Quote History" },
-    { id: "dashboard", icon: "📊", label: "Sold Dashboard" },
+    { id: "dashboard", icon: "📊", label: "P&L Management" },
     { id: "auction", icon: "🔨", label: "Auction Console" },
     { id: "settings", icon: "⚙️", label: "Settings" },
   ];
@@ -252,7 +361,7 @@ export default function App() {
             slackUrl={slackUrl} sheetUrl={sheetUrl} managerEmail={managerEmail} currentUser={currentUser} />
         )}
         {tab === "history" && <HistoryTab history={history} />}
-        {tab === "dashboard" && <DashboardTab />}
+        {tab === "dashboard" && <PnlManagementTab />}
         {rows && tab === "auction" && (
           <AuctionTab rows={rows} slackUrl={slackUrl} sheetUrl={sheetUrl} managerEmail={managerEmail} currentUser={currentUser} />
         )}
@@ -819,73 +928,418 @@ function HistoryTab({ history }) {
 }
 
 // ═════════════════════════════════════════════════════════════════════
-//  TAB 4 — SOLD DASHBOARD
+//  TAB 4 — P&L MANAGEMENT
 // ═════════════════════════════════════════════════════════════════════
 function DashboardTab() {
-  const d = DUMMY_DASH;
+  const [period, setPeriod] = useState("MTD"); // "MTD" | "LMTD" | "custom"
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [zone, setZone] = useState("ALL");
+  const [bv, setBv] = useState("ALL");
+  const [tesla, setTesla] = useState("ALL");
+  const [section, setSection] = useState("inventory"); // "inventory"|"sbnd"|"smc"|"pnlhit"
+
+  const d = PNL_DATA;
+  const p = period === "LMTD" ? "LMTD" : "MTD"; // custom falls back to MTD for now
+
+  // Aggregated totals for the current period
+  const invData = d.inventorySold[p];
+  const totals = useMemo(() => {
+    const rows = invData;
+    const openInv = rows.reduce((s, r) => s + r.openInv, 0);
+    const sold = rows.reduce((s, r) => s + r.sold, 0);
+    const pnl = rows.reduce((s, r) => s + r.soldPnL, 0);
+    const totalSoldBP = rows.reduce((s, r) => s + (r.soldAvgBP * r.sold), 0);
+    return { openInv, sold, pnl, avgLoss: sold ? pnl / sold : 0, avgBP: sold ? totalSoldBP / sold : 0 };
+  }, [invData]);
+
+  const sbndData = d.sbnd[p];
+  const sbndTotal = sbndData.reduce((s, r) => s + r.count, 0);
+
+  const smcData = d.smc[p];
+  const smcSoldTotal = smcData.sold.reduce((s, r) => s + r.count, 0);
+  const smcSoldPnL = smcData.sold.reduce((s, r) => s + r.pnl, 0);
+  const smcSBNDTotal = smcData.sbnd.reduce((s, r) => s + r.count, 0);
+
+  const pnlHit = d.pnlHit[p];
+  const totalPnLHit = (pnlHit.soldCars.pnl) + (pnlHit.provisioned.provisionAmt) + (pnlHit.returnedCars.provisionAmt) + (pnlHit.smcSold.pnl) + (pnlHit.leadFeeRevenue.amount) + (pnlHit.ninetyPlusSoldReversal.amount);
+
+  const sectionTabs = [
+    { id: "inventory", icon: "📦", label: "Inventory & Sold" },
+    { id: "sbnd", icon: "🚚", label: "SBND Pipeline" },
+    { id: "smc", icon: "🔄", label: "Same Month Cancelled" },
+    { id: "pnlhit", icon: "💰", label: "P&L Hit" },
+  ];
+
+  const tbl = { borderCollapse: "collapse", width: "100%", fontSize: 13 };
+  const hdr = { ...S.th, position: "static" };
+  const cel = S.td;
+  const numR = { ...cel, textAlign: "right", fontVariantNumeric: "tabular-nums" };
+  const numRB = { ...numR, fontWeight: 700 };
+  const totRow = { background: "#F8FAFC", fontWeight: 800 };
+
   return (
     <div>
-      <div style={{ padding: "12px 16px", background: "#FEF3C7", borderRadius: 8, marginBottom: 20, fontSize: 13, color: "#78350F" }}>
-        ⚠️ <b>Showing dummy data.</b> Connect your sold-cars data source later to see real numbers.
+      {/* ── Period Selector + Filters ───────────────────────────── */}
+      <div style={{ ...S.card, marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+          <div style={{ display: "flex", gap: 6 }}>
+            {["MTD", "LMTD", "Custom"].map((per) => (
+              <button key={per} onClick={() => setPeriod(per === "Custom" ? "custom" : per)} style={{
+                padding: "9px 20px", borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+                border: period === (per === "Custom" ? "custom" : per) ? "2px solid #3B82F6" : "2px solid #E2E8F0",
+                background: period === (per === "Custom" ? "custom" : per) ? "#EFF6FF" : "#FFF",
+                color: period === (per === "Custom" ? "custom" : per) ? "#1D4ED8" : "#64748B",
+              }}>{per}</button>
+            ))}
+            {period === "custom" && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: 8 }}>
+                <input type="date" style={S.sel} value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+                <span style={{ color: "#64748B" }}>to</span>
+                <input type="date" style={S.sel} value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+              </div>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <select style={S.sel} value={zone} onChange={(e) => setZone(e.target.value)}>
+              <option value="ALL">📍 All Zones</option>
+              <option value="North">North</option>
+              <option value="South">South</option>
+            </select>
+            <select style={S.sel} value={bv} onChange={(e) => setBv(e.target.value)}>
+              <option value="ALL">🏷️ All BV</option>
+              <option value="C2D">C2D</option>
+              <option value="C2B">C2B</option>
+            </select>
+            <select style={S.sel} value={tesla} onChange={(e) => setTesla(e.target.value)}>
+              <option value="ALL">⚡ Tesla: All</option>
+              <option value="1">Tesla: 1</option>
+              <option value="0">Tesla: 0</option>
+            </select>
+          </div>
+        </div>
       </div>
 
+      {/* ── Top-line KPI cards ──────────────────────────────────── */}
       <div style={S.metrics}>
-        <div style={S.mCard}>
-          <div style={{ fontSize: 28, fontWeight: 900, color: "#3B82F6" }}>{d.totalSold.toLocaleString()}</div>
-          <div style={S.mLabel}>Total Cars Sold</div>
-        </div>
-        <div style={S.mCard}>
-          <div style={{ fontSize: 28, fontWeight: 900, color: d.totalPnL >= 0 ? "#10B981" : "#EF4444" }}>{INR(d.totalPnL)}</div>
-          <div style={S.mLabel}>Total P&L</div>
-        </div>
-        <div style={S.mCard}>
-          <div style={{ fontSize: 28, fontWeight: 900, color: d.avgLossPerCar >= 0 ? "#10B981" : "#EF4444" }}>{INR(d.avgLossPerCar)}</div>
-          <div style={S.mLabel}>Avg Loss / Car</div>
-        </div>
+        <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: "#3B82F6" }}>{totals.openInv.toLocaleString()}</div><div style={S.mLabel}>Opening Inventory</div></div>
+        <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: "#10B981" }}>{totals.sold.toLocaleString()}</div><div style={S.mLabel}>Cars Sold ({p})</div></div>
+        <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: "#EF4444" }}>{INR(totals.pnl)}</div><div style={S.mLabel}>Total P&L</div></div>
+        <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: "#EF4444" }}>{INR(totals.avgLoss)}</div><div style={S.mLabel}>Avg Loss/Car</div></div>
+        <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: "#F59E0B" }}>{sbndTotal}</div><div style={S.mLabel}>SBND Pipeline</div></div>
+        <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: totalPnLHit >= 0 ? "#10B981" : "#EF4444" }}>{INR(totalPnLHit)}</div><div style={S.mLabel}>Net P&L Hit</div></div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginTop: 20 }}>
-        <div style={S.card}>
-          <div style={S.cHead}>📊 Sold by SI Bucket</div>
-          <table style={S.table}>
-            <thead><tr>
-              {["Bucket", "Cars Sold", "P&L", "Avg Loss/Car"].map((h) => <th key={h} style={S.th}>{h}</th>)}
-            </tr></thead>
-            <tbody>
-              {d.byBucket.map((b) => (
-                <tr key={b.bucket} className="tr">
-                  <td style={S.td}><span style={S.bucketChip}>{b.bucket}</span></td>
-                  <td style={{ ...S.td, fontWeight: 700 }}>{b.sold}</td>
-                  <td style={{ ...S.td, color: b.pnl >= 0 ? "#10B981" : "#EF4444", fontWeight: 700 }}>{INR(b.pnl)}</td>
-                  <td style={{ ...S.td, color: b.avgLoss >= 0 ? "#10B981" : "#EF4444" }}>{INR(b.avgLoss)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {/* ── Section sub-tabs ────────────────────────────────────── */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 16, marginTop: 4 }}>
+        {sectionTabs.map((t) => (
+          <button key={t.id} onClick={() => setSection(t.id)} style={{
+            ...(section === t.id ? S.navActive : S.navBtn),
+            padding: "10px 18px",
+          }}>
+            <span style={{ marginRight: 6 }}>{t.icon}</span>{t.label}
+          </button>
+        ))}
+      </div>
 
+      {/* ════════════════════════════════════════════════════════════
+          SECTION 1: INVENTORY & SOLD
+         ════════════════════════════════════════════════════════════ */}
+      {section === "inventory" && (
         <div style={S.card}>
-          <div style={S.cHead}>🏷️ Sold by Channel</div>
-          <table style={S.table}>
+          <div style={S.cHead}>📦 Aging Bucket-wise Opening Inventory & Sold Cars ({p})</div>
+          <div style={{ overflowX: "auto" }}>
+            <table style={tbl}>
+              <thead><tr>
+                <th style={hdr}>SI Bucket</th>
+                <th style={{ ...hdr, textAlign: "right" }}>Open Inv</th>
+                <th style={{ ...hdr, textAlign: "right" }}>Avg BP (Open)</th>
+                <th style={{ ...hdr, textAlign: "right" }}>Sold</th>
+                <th style={{ ...hdr, textAlign: "right" }}>Avg BP (Sold)</th>
+                <th style={{ ...hdr, textAlign: "right" }}>P&L</th>
+                <th style={{ ...hdr, textAlign: "right" }}>P&L %</th>
+                <th style={{ ...hdr, textAlign: "right" }}>Avg Loss/Car</th>
+              </tr></thead>
+              <tbody>
+                {invData.map((r) => {
+                  const avgLoss = r.sold ? r.soldPnL / r.sold : 0;
+                  return (
+                    <tr key={r.bucket} className="tr">
+                      <td style={cel}><span style={S.bucketChip}>{r.bucket}</span></td>
+                      <td style={numRB}>{r.openInv.toLocaleString()}</td>
+                      <td style={numR}>{INR(r.openAvgBP)}</td>
+                      <td style={numRB}>{r.sold.toLocaleString()}</td>
+                      <td style={numR}>{INR(r.soldAvgBP)}</td>
+                      <td style={{ ...numRB, color: r.soldPnL >= 0 ? "#10B981" : "#EF4444" }}>{INR(r.soldPnL)}</td>
+                      <td style={{ ...numR, color: r.soldPnLPct >= 0 ? "#10B981" : "#EF4444" }}>{r.soldPnLPct.toFixed(2)}%</td>
+                      <td style={{ ...numR, color: avgLoss >= 0 ? "#10B981" : "#EF4444" }}>{INR(avgLoss)}</td>
+                    </tr>
+                  );
+                })}
+                {/* Total row */}
+                <tr style={totRow}>
+                  <td style={{ ...cel, fontWeight: 800 }}>TOTAL</td>
+                  <td style={numRB}>{invData.reduce((s, r) => s + r.openInv, 0).toLocaleString()}</td>
+                  <td style={numR}>{INR(invData.reduce((s, r) => s + r.openAvgBP * r.openInv, 0) / Math.max(1, invData.reduce((s, r) => s + r.openInv, 0)))}</td>
+                  <td style={numRB}>{totals.sold.toLocaleString()}</td>
+                  <td style={numR}>{INR(totals.avgBP)}</td>
+                  <td style={{ ...numRB, color: totals.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(totals.pnl)}</td>
+                  <td style={{ ...numR, color: "#64748B" }}>—</td>
+                  <td style={{ ...numR, color: totals.avgLoss >= 0 ? "#10B981" : "#EF4444" }}>{INR(totals.avgLoss)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          {(zone !== "ALL" || bv !== "ALL" || tesla !== "ALL") && (
+            <div style={{ marginTop: 12, padding: "10px 14px", background: "#FEF3C7", borderRadius: 8, fontSize: 12, color: "#78350F" }}>
+              ⚠️ Filter applied: {zone !== "ALL" ? `Zone=${zone} ` : ""}{bv !== "ALL" ? `BV=${bv} ` : ""}{tesla !== "ALL" ? `Tesla=${tesla}` : ""}
+              — Filtered numbers will be live once data source is connected.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════════
+          SECTION 2: SBND (Sold But Not Delivered)
+         ════════════════════════════════════════════════════════════ */}
+      {section === "sbnd" && (
+        <div style={S.card}>
+          <div style={S.cHead}>🚚 SBND Pipeline — Sold But Not Delivered ({p})</div>
+          <div style={{ padding: "10px 14px", background: "#F0F9FF", borderRadius: 8, marginBottom: 16, fontSize: 13, color: "#0C4A6E" }}>
+            Cars with a verified dealer bid but not yet stocked out. This is the pipeline for upcoming deliveries/stock-outs.
+          </div>
+          <table style={tbl}>
             <thead><tr>
-              {["Channel", "Cars Sold", "P&L", "% of Total"].map((h) => <th key={h} style={S.th}>{h}</th>)}
+              <th style={hdr}>SI Bucket</th>
+              <th style={{ ...hdr, textAlign: "right" }}>SBND Cars</th>
+              <th style={{ ...hdr, textAlign: "right" }}>Avg BP</th>
+              <th style={{ ...hdr, textAlign: "right" }}>Total BP Locked</th>
+              <th style={{ ...hdr, textAlign: "right" }}>% of Total SBND</th>
             </tr></thead>
             <tbody>
-              {d.byChannel.map((c) => (
-                <tr key={c.channel} className="tr">
-                  <td style={{ ...S.td, fontWeight: 700 }}>{c.channel}</td>
-                  <td style={S.td}>{c.sold}</td>
-                  <td style={{ ...S.td, color: c.pnl >= 0 ? "#10B981" : "#EF4444", fontWeight: 700 }}>{INR(c.pnl)}</td>
-                  <td style={S.td}>{((c.sold / d.totalSold) * 100).toFixed(1)}%</td>
+              {sbndData.map((r) => (
+                <tr key={r.bucket} className="tr">
+                  <td style={cel}><span style={S.bucketChip}>{r.bucket}</span></td>
+                  <td style={numRB}>{r.count}</td>
+                  <td style={numR}>{INR(r.avgBP)}</td>
+                  <td style={numR}>{INR(r.avgBP * r.count)}</td>
+                  <td style={numR}>{sbndTotal ? ((r.count / sbndTotal) * 100).toFixed(1) : 0}%</td>
                 </tr>
               ))}
+              <tr style={totRow}>
+                <td style={{ ...cel, fontWeight: 800 }}>TOTAL</td>
+                <td style={numRB}>{sbndTotal}</td>
+                <td style={numR}>{INR(sbndData.reduce((s, r) => s + r.avgBP * r.count, 0) / Math.max(1, sbndTotal))}</td>
+                <td style={numRB}>{INR(sbndData.reduce((s, r) => s + r.avgBP * r.count, 0))}</td>
+                <td style={numR}>100%</td>
+              </tr>
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════════
+          SECTION 3: SAME MONTH CANCELLED (SMC)
+         ════════════════════════════════════════════════════════════ */}
+      {section === "smc" && (
+        <div>
+          <div style={{ ...S.card, marginBottom: 16 }}>
+            <div style={S.cHead}>🔄 Same Month Cancelled — Sold Cars ({p})</div>
+            <div style={{ padding: "10px 14px", background: "#FFF7ED", borderRadius: 8, marginBottom: 16, fontSize: 13, color: "#9A3412" }}>
+              Cars cancelled and re-sold within the same month. These incur additional handling and potential P&L impact.
+            </div>
+            <table style={tbl}>
+              <thead><tr>
+                <th style={hdr}>SI Bucket</th>
+                <th style={{ ...hdr, textAlign: "right" }}>SMC Sold</th>
+                <th style={{ ...hdr, textAlign: "right" }}>Avg BP</th>
+                <th style={{ ...hdr, textAlign: "right" }}>P&L</th>
+                <th style={{ ...hdr, textAlign: "right" }}>Avg Loss/Car</th>
+              </tr></thead>
+              <tbody>
+                {smcData.sold.map((r) => (
+                  <tr key={r.bucket} className="tr">
+                    <td style={cel}><span style={S.bucketChip}>{r.bucket}</span></td>
+                    <td style={numRB}>{r.count}</td>
+                    <td style={numR}>{INR(r.avgBP)}</td>
+                    <td style={{ ...numRB, color: r.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(r.pnl)}</td>
+                    <td style={{ ...numR, color: "#EF4444" }}>{INR(r.count ? r.pnl / r.count : 0)}</td>
+                  </tr>
+                ))}
+                <tr style={totRow}>
+                  <td style={{ ...cel, fontWeight: 800 }}>TOTAL</td>
+                  <td style={numRB}>{smcSoldTotal}</td>
+                  <td style={numR}>—</td>
+                  <td style={{ ...numRB, color: smcSoldPnL >= 0 ? "#10B981" : "#EF4444" }}>{INR(smcSoldPnL)}</td>
+                  <td style={{ ...numR, color: "#EF4444" }}>{INR(smcSoldTotal ? smcSoldPnL / smcSoldTotal : 0)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style={S.card}>
+            <div style={S.cHead}>🔄 Same Month Cancelled — SBND Cars ({p})</div>
+            <table style={tbl}>
+              <thead><tr>
+                <th style={hdr}>SI Bucket</th>
+                <th style={{ ...hdr, textAlign: "right" }}>SMC SBND</th>
+                <th style={{ ...hdr, textAlign: "right" }}>Avg BP</th>
+                <th style={{ ...hdr, textAlign: "right" }}>Total BP Locked</th>
+              </tr></thead>
+              <tbody>
+                {smcData.sbnd.map((r) => (
+                  <tr key={r.bucket} className="tr">
+                    <td style={cel}><span style={S.bucketChip}>{r.bucket}</span></td>
+                    <td style={numRB}>{r.count}</td>
+                    <td style={numR}>{INR(r.avgBP)}</td>
+                    <td style={numR}>{INR(r.avgBP * r.count)}</td>
+                  </tr>
+                ))}
+                <tr style={totRow}>
+                  <td style={{ ...cel, fontWeight: 800 }}>TOTAL</td>
+                  <td style={numRB}>{smcSBNDTotal}</td>
+                  <td style={numR}>—</td>
+                  <td style={numRB}>{INR(smcData.sbnd.reduce((s, r) => s + r.avgBP * r.count, 0))}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════════
+          SECTION 4: P&L HIT
+         ════════════════════════════════════════════════════════════ */}
+      {section === "pnlhit" && (
+        <div>
+          {/* Net P&L Hit summary bar */}
+          <div style={{ ...S.card, marginBottom: 16, background: totalPnLHit >= 0 ? "#ECFDF5" : "#FEF2F2", border: totalPnLHit >= 0 ? "1px solid #A7F3D0" : "1px solid #FECACA" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontSize: 12, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 }}>Net P&L Hit ({p})</div>
+                <div style={{ fontSize: 32, fontWeight: 900, color: totalPnLHit >= 0 ? "#166534" : "#991B1B", marginTop: 4 }}>{INR(totalPnLHit)}</div>
+              </div>
+              <div style={{ fontSize: 13, color: "#64748B", textAlign: "right", lineHeight: 2 }}>
+                Sold P&L + Provision + Returns + SMC + Lead Fee + 90+ Reversal
+              </div>
+            </div>
+          </div>
+
+          {/* P&L Component Blocks */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 16 }}>
+            {/* Sold Cars P&L */}
+            <div style={{ ...S.card, borderTop: "4px solid #EF4444" }}>
+              <div style={{ fontSize: 12, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 8 }}>Sold Cars P&L</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: "#EF4444" }}>{INR(pnlHit.soldCars.pnl)}</div>
+              <div style={{ fontSize: 14, color: "#0F172A", marginTop: 8 }}>
+                <b>{pnlHit.soldCars.count}</b> cars sold this month
+              </div>
+              <div style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>
+                Avg loss: {INR(pnlHit.soldCars.count ? pnlHit.soldCars.pnl / pnlHit.soldCars.count : 0)}/car
+              </div>
+            </div>
+
+            {/* Provisioned Cars */}
+            <div style={{ ...S.card, borderTop: "4px solid #F59E0B" }}>
+              <div style={{ fontSize: 12, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 8 }}>Provisioned Amount</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: "#F59E0B" }}>{INR(pnlHit.provisioned.provisionAmt)}</div>
+              <div style={{ fontSize: 14, color: "#0F172A", marginTop: 8 }}>
+                <b>{pnlHit.provisioned.count}</b> cars under provision
+              </div>
+              <div style={{ fontSize: 12, color: "#78350F", marginTop: 4, background: "#FEF3C7", padding: "4px 8px", borderRadius: 4, display: "inline-block" }}>
+                ↓ Reduces as cars sell
+              </div>
+            </div>
+
+            {/* Returned Cars */}
+            <div style={{ ...S.card, borderTop: "4px solid #8B5CF6" }}>
+              <div style={{ fontSize: 12, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 8 }}>Returned Cars Provision</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: "#8B5CF6" }}>{INR(pnlHit.returnedCars.provisionAmt)}</div>
+              <div style={{ fontSize: 14, color: "#0F172A", marginTop: 8 }}>
+                <b>{pnlHit.returnedCars.count}</b> cars returned
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+            {/* SMC P&L */}
+            <div style={{ ...S.card, borderTop: "4px solid #EC4899" }}>
+              <div style={{ fontSize: 12, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 8 }}>Same Month Sold P&L</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: "#EC4899" }}>{INR(pnlHit.smcSold.pnl)}</div>
+              <div style={{ fontSize: 14, color: "#0F172A", marginTop: 8 }}>
+                <b>{pnlHit.smcSold.count}</b> SMC sold + <b>{pnlHit.smcSBND.count}</b> SMC SBND
+              </div>
+            </div>
+
+            {/* Lead Fee Revenue */}
+            <div style={{ ...S.card, borderTop: "4px solid #10B981" }}>
+              <div style={{ fontSize: 12, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 8 }}>Lead Fee Revenue</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: "#10B981" }}>+{INR(pnlHit.leadFeeRevenue.amount)}</div>
+              <div style={{ fontSize: 12, color: "#065F46", marginTop: 8, background: "#ECFDF5", padding: "4px 8px", borderRadius: 4, display: "inline-block" }}>
+                Offsets P&L losses
+              </div>
+            </div>
+
+            {/* 90+ Sold Reversal */}
+            <div style={{ ...S.card, borderTop: "4px solid #06B6D4" }}>
+              <div style={{ fontSize: 12, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700, marginBottom: 8 }}>90+ Sold Reversal</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: "#06B6D4" }}>+{INR(pnlHit.ninetyPlusSoldReversal.amount)}</div>
+              <div style={{ fontSize: 14, color: "#0F172A", marginTop: 8 }}>
+                <b>{pnlHit.ninetyPlusSoldReversal.count}</b> cars — provision reversed on sale
+              </div>
+            </div>
+          </div>
+
+          {/* Waterfall summary */}
+          <div style={{ ...S.card, marginTop: 16 }}>
+            <div style={S.cHead}>📊 P&L Waterfall ({p})</div>
+            <table style={tbl}>
+              <thead><tr>
+                <th style={hdr}>Component</th>
+                <th style={{ ...hdr, textAlign: "right" }}>Cars</th>
+                <th style={{ ...hdr, textAlign: "right" }}>Amount</th>
+                <th style={{ ...hdr, textAlign: "right" }}>Impact</th>
+              </tr></thead>
+              <tbody>
+                {[
+                  { label: "Sold Cars P&L", cars: pnlHit.soldCars.count, amount: pnlHit.soldCars.pnl, impact: "negative" },
+                  { label: "Provisioned Cars", cars: pnlHit.provisioned.count, amount: pnlHit.provisioned.provisionAmt, impact: "negative" },
+                  { label: "Returned Cars Provision", cars: pnlHit.returnedCars.count, amount: pnlHit.returnedCars.provisionAmt, impact: "negative" },
+                  { label: "Same Month Sold P&L", cars: pnlHit.smcSold.count, amount: pnlHit.smcSold.pnl, impact: "negative" },
+                  { label: "Lead Fee Revenue", cars: "—", amount: pnlHit.leadFeeRevenue.amount, impact: "positive" },
+                  { label: "90+ Sold Reversal", cars: pnlHit.ninetyPlusSoldReversal.count, amount: pnlHit.ninetyPlusSoldReversal.amount, impact: "positive" },
+                ].map((row, i) => (
+                  <tr key={i} className="tr">
+                    <td style={{ ...cel, fontWeight: 600 }}>{row.label}</td>
+                    <td style={numR}>{typeof row.cars === "number" ? row.cars.toLocaleString() : row.cars}</td>
+                    <td style={{ ...numRB, color: row.impact === "positive" ? "#10B981" : "#EF4444" }}>
+                      {row.impact === "positive" ? "+" : ""}{INR(row.amount)}
+                    </td>
+                    <td style={{ ...numR, color: row.impact === "positive" ? "#10B981" : "#EF4444" }}>
+                      {row.impact === "positive" ? "▲" : "▼"}
+                    </td>
+                  </tr>
+                ))}
+                <tr style={{ ...totRow, borderTop: "2px solid #0F172A" }}>
+                  <td style={{ ...cel, fontWeight: 900, fontSize: 14 }}>NET P&L HIT</td>
+                  <td style={numR}>—</td>
+                  <td style={{ ...numRB, fontSize: 16, color: totalPnLHit >= 0 ? "#10B981" : "#EF4444" }}>{INR(totalPnLHit)}</td>
+                  <td style={numR}>{totalPnLHit >= 0 ? "▲" : "▼"}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Dummy data notice */}
+      <div style={{ marginTop: 20, padding: "10px 14px", background: "#FEF3C7", borderRadius: 8, fontSize: 12, color: "#78350F" }}>
+        ⚠️ All numbers are currently dummy/fixed. Will be connected to live data via query or sheet import.
       </div>
     </div>
   );
 }
+
 
 // ═════════════════════════════════════════════════════════════════════
 //  TAB 5 — AUCTION CONSOLE
@@ -1768,4 +2222,3 @@ const CSS = `
   input:focus,textarea:focus,select:focus{border-color:#3B82F6!important;box-shadow:0 0 0 3px #3B82F620}
   button:disabled{opacity:.4;cursor:not-allowed}
   @media(max-width:1100px){.ql{grid-template-columns:1fr!important}}
-`;
