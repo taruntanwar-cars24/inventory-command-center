@@ -125,132 +125,6 @@ const DETAIL_GROUPS = [
 ];
 
 // ═════════════════════════════════════════════════════════════════════
-//  P&L MANAGEMENT — DUMMY DATA
-//  Structured to mirror actual Cars24 stuck-inventory ops metrics.
-//  Replace with API/query calls later.
-// ═════════════════════════════════════════════════════════════════════
-const PNL_DATA = {
-  // ── 1. Bucket-wise Inventory & Sold (MTD & LMTD) ──────────────
-  // Each bucket has: opening inventory, sold cars, avg BP (opening & sold), P&L, P&L%
-  // Filterable by zone, channel, tesla flag
-  bucketWise: {
-    MTD: [
-      { bucket: "0-30",    zone: "North", channel: "C2B", tesla: 0, openingInv: 180, openingAvgBP: 285000, soldCars: 72, soldAvgBP: 278000, soldRevenue: 27200 * 72, pnl: -3_10_000, pnlPct: -1.55 },
-      { bucket: "0-30",    zone: "North", channel: "C2D", tesla: 0, openingInv: 95,  openingAvgBP: 310000, soldCars: 41, soldAvgBP: 305000, soldRevenue: 0, pnl: -1_80_000, pnlPct: -1.42 },
-      { bucket: "0-30",    zone: "South", channel: "C2B", tesla: 0, openingInv: 160, openingAvgBP: 265000, soldCars: 68, soldAvgBP: 260000, soldRevenue: 0, pnl: -2_45_000, pnlPct: -1.38 },
-      { bucket: "0-30",    zone: "South", channel: "C2D", tesla: 0, openingInv: 78,  openingAvgBP: 295000, soldCars: 32, soldAvgBP: 290000, soldRevenue: 0, pnl: -1_50_000, pnlPct: -1.60 },
-      { bucket: "0-30",    zone: "North", channel: "C2B", tesla: 1, openingInv: 22,  openingAvgBP: 450000, soldCars: 8,  soldAvgBP: 440000, soldRevenue: 0, pnl: -95_000,  pnlPct: -2.70 },
-      { bucket: "0-30",    zone: "South", channel: "C2B", tesla: 1, openingInv: 15,  openingAvgBP: 420000, soldCars: 5,  soldAvgBP: 415000, soldRevenue: 0, pnl: -60_000,  pnlPct: -2.90 },
-
-      { bucket: "30-60",   zone: "North", channel: "C2B", tesla: 0, openingInv: 140, openingAvgBP: 295000, soldCars: 52, soldAvgBP: 282000, soldRevenue: 0, pnl: -5_80_000, pnlPct: -3.80 },
-      { bucket: "30-60",   zone: "North", channel: "C2D", tesla: 0, openingInv: 68,  openingAvgBP: 320000, soldCars: 28, soldAvgBP: 308000, soldRevenue: 0, pnl: -3_20_000, pnlPct: -3.68 },
-      { bucket: "30-60",   zone: "South", channel: "C2B", tesla: 0, openingInv: 120, openingAvgBP: 275000, soldCars: 45, soldAvgBP: 265000, soldRevenue: 0, pnl: -4_30_000, pnlPct: -3.60 },
-      { bucket: "30-60",   zone: "South", channel: "C2D", tesla: 0, openingInv: 55,  openingAvgBP: 305000, soldCars: 22, soldAvgBP: 292000, soldRevenue: 0, pnl: -2_70_000, pnlPct: -3.96 },
-      { bucket: "30-60",   zone: "North", channel: "C2B", tesla: 1, openingInv: 18,  openingAvgBP: 460000, soldCars: 6,  soldAvgBP: 435000, soldRevenue: 0, pnl: -1_65_000, pnlPct: -6.32 },
-
-      { bucket: "60-90",   zone: "North", channel: "C2B", tesla: 0, openingInv: 95,  openingAvgBP: 310000, soldCars: 32, soldAvgBP: 285000, soldRevenue: 0, pnl: -7_20_000, pnlPct: -7.25 },
-      { bucket: "60-90",   zone: "North", channel: "C2D", tesla: 0, openingInv: 42,  openingAvgBP: 335000, soldCars: 15, soldAvgBP: 310000, soldRevenue: 0, pnl: -3_40_000, pnlPct: -6.80 },
-      { bucket: "60-90",   zone: "South", channel: "C2B", tesla: 0, openingInv: 80,  openingAvgBP: 290000, soldCars: 28, soldAvgBP: 268000, soldRevenue: 0, pnl: -5_80_000, pnlPct: -7.40 },
-      { bucket: "60-90",   zone: "South", channel: "C2D", tesla: 0, openingInv: 35,  openingAvgBP: 315000, soldCars: 12, soldAvgBP: 290000, soldRevenue: 0, pnl: -2_85_000, pnlPct: -7.75 },
-
-      { bucket: "90-120",  zone: "North", channel: "C2B", tesla: 0, openingInv: 55,  openingAvgBP: 325000, soldCars: 18, soldAvgBP: 280000, soldRevenue: 0, pnl: -7_50_000, pnlPct: -13.0 },
-      { bucket: "90-120",  zone: "South", channel: "C2B", tesla: 0, openingInv: 40,  openingAvgBP: 305000, soldCars: 12, soldAvgBP: 265000, soldRevenue: 0, pnl: -4_50_000, pnlPct: -12.2 },
-      { bucket: "90-120",  zone: "North", channel: "C2D", tesla: 0, openingInv: 22,  openingAvgBP: 340000, soldCars: 8,  soldAvgBP: 295000, soldRevenue: 0, pnl: -3_20_000, pnlPct: -13.5 },
-
-      { bucket: "120-150", zone: "North", channel: "C2B", tesla: 0, openingInv: 30,  openingAvgBP: 340000, soldCars: 10, soldAvgBP: 275000, soldRevenue: 0, pnl: -6_10_000, pnlPct: -18.4 },
-      { bucket: "120-150", zone: "South", channel: "C2B", tesla: 0, openingInv: 22,  openingAvgBP: 320000, soldCars: 7,  soldAvgBP: 262000, soldRevenue: 0, pnl: -3_80_000, pnlPct: -17.8 },
-
-      { bucket: "150-180", zone: "North", channel: "C2B", tesla: 0, openingInv: 18,  openingAvgBP: 355000, soldCars: 5,  soldAvgBP: 270000, soldRevenue: 0, pnl: -4_00_000, pnlPct: -23.6 },
-      { bucket: "150-180", zone: "South", channel: "C2B", tesla: 0, openingInv: 12,  openingAvgBP: 330000, soldCars: 3,  soldAvgBP: 255000, soldRevenue: 0, pnl: -2_10_000, pnlPct: -22.4 },
-
-      { bucket: "180+",    zone: "North", channel: "C2B", tesla: 0, openingInv: 25,  openingAvgBP: 380000, soldCars: 4,  soldAvgBP: 260000, soldRevenue: 0, pnl: -4_50_000, pnlPct: -29.0 },
-      { bucket: "180+",    zone: "South", channel: "C2B", tesla: 0, openingInv: 18,  openingAvgBP: 350000, soldCars: 3,  soldAvgBP: 248000, soldRevenue: 0, pnl: -2_85_000, pnlPct: -27.2 },
-    ],
-    LMTD: [
-      { bucket: "0-30",    zone: "North", channel: "C2B", tesla: 0, openingInv: 195, openingAvgBP: 280000, soldCars: 78, soldAvgBP: 275000, soldRevenue: 0, pnl: -2_80_000, pnlPct: -1.30 },
-      { bucket: "0-30",    zone: "South", channel: "C2B", tesla: 0, openingInv: 170, openingAvgBP: 260000, soldCars: 72, soldAvgBP: 257000, soldRevenue: 0, pnl: -2_10_000, pnlPct: -1.14 },
-      { bucket: "30-60",   zone: "North", channel: "C2B", tesla: 0, openingInv: 155, openingAvgBP: 290000, soldCars: 58, soldAvgBP: 280000, soldRevenue: 0, pnl: -5_20_000, pnlPct: -3.20 },
-      { bucket: "30-60",   zone: "South", channel: "C2B", tesla: 0, openingInv: 130, openingAvgBP: 270000, soldCars: 48, soldAvgBP: 262000, soldRevenue: 0, pnl: -3_60_000, pnlPct: -2.85 },
-      { bucket: "60-90",   zone: "North", channel: "C2B", tesla: 0, openingInv: 100, openingAvgBP: 305000, soldCars: 35, soldAvgBP: 282000, soldRevenue: 0, pnl: -6_80_000, pnlPct: -6.32 },
-      { bucket: "60-90",   zone: "South", channel: "C2B", tesla: 0, openingInv: 85,  openingAvgBP: 285000, soldCars: 30, soldAvgBP: 265000, soldRevenue: 0, pnl: -5_40_000, pnlPct: -6.45 },
-      { bucket: "90+",     zone: "North", channel: "C2B", tesla: 0, openingInv: 80,  openingAvgBP: 340000, soldCars: 22, soldAvgBP: 280000, soldRevenue: 0, pnl: -12_00_000,pnlPct: -15.4 },
-      { bucket: "90+",     zone: "South", channel: "C2B", tesla: 0, openingInv: 60,  openingAvgBP: 320000, soldCars: 16, soldAvgBP: 268000, soldRevenue: 0, pnl: -7_80_000, pnlPct: -14.8 },
-    ],
-  },
-
-  // ── 2. SBND (Sold But Not Delivered) ───────────────────────────
-  sbnd: {
-    MTD: [
-      { bucket: "0-30",    count: 45, avgBP: 282000, avgDealerBid: 276000, daysSinceSale: 3.2 },
-      { bucket: "30-60",   count: 32, avgBP: 290000, avgDealerBid: 278000, daysSinceSale: 4.8 },
-      { bucket: "60-90",   count: 22, avgBP: 305000, avgDealerBid: 282000, daysSinceSale: 6.1 },
-      { bucket: "90-120",  count: 14, avgBP: 320000, avgDealerBid: 280000, daysSinceSale: 8.5 },
-      { bucket: "120-150", count: 8,  avgBP: 335000, avgDealerBid: 275000, daysSinceSale: 10.2 },
-      { bucket: "150-180", count: 5,  avgBP: 350000, avgDealerBid: 270000, daysSinceSale: 12.0 },
-      { bucket: "180+",    count: 3,  avgBP: 375000, avgDealerBid: 260000, daysSinceSale: 15.4 },
-    ],
-    LMTD: [
-      { bucket: "0-30",    count: 52, avgBP: 278000, avgDealerBid: 273000, daysSinceSale: 2.8 },
-      { bucket: "30-60",   count: 38, avgBP: 285000, avgDealerBid: 274000, daysSinceSale: 4.2 },
-      { bucket: "60-90",   count: 25, avgBP: 298000, avgDealerBid: 278000, daysSinceSale: 5.5 },
-      { bucket: "90+",     count: 18, avgBP: 330000, avgDealerBid: 278000, daysSinceSale: 9.8 },
-    ],
-  },
-
-  // ── 3. Same Month Cancelled (SMC) — sold + SBND ───────────────
-  smc: {
-    MTD: {
-      sold: [
-        { bucket: "0-30",  count: 28, avgBP: 275000, pnl: -1_40_000, pnlPct: -1.82 },
-        { bucket: "30-60", count: 18, avgBP: 288000, pnl: -1_80_000, pnlPct: -3.47 },
-        { bucket: "60-90", count: 12, avgBP: 305000, pnl: -2_10_000, pnlPct: -5.74 },
-        { bucket: "90+",   count: 6,  avgBP: 340000, pnl: -1_80_000, pnlPct: -8.82 },
-      ],
-      sbnd: [
-        { bucket: "0-30",  count: 15, avgBP: 280000 },
-        { bucket: "30-60", count: 10, avgBP: 292000 },
-        { bucket: "60-90", count: 6,  avgBP: 310000 },
-        { bucket: "90+",   count: 3,  avgBP: 345000 },
-      ],
-    },
-    LMTD: {
-      sold: [
-        { bucket: "0-30",  count: 32, avgBP: 270000, pnl: -1_20_000, pnlPct: -1.38 },
-        { bucket: "30-60", count: 20, avgBP: 282000, pnl: -1_50_000, pnlPct: -2.66 },
-        { bucket: "60-90", count: 14, avgBP: 300000, pnl: -1_95_000, pnlPct: -4.64 },
-        { bucket: "90+",   count: 8,  avgBP: 335000, pnl: -2_10_000, pnlPct: -7.84 },
-      ],
-      sbnd: [
-        { bucket: "0-30",  count: 18, avgBP: 275000 },
-        { bucket: "30-60", count: 12, avgBP: 285000 },
-        { bucket: "60-90", count: 8,  avgBP: 302000 },
-        { bucket: "90+",   count: 4,  avgBP: 338000 },
-      ],
-    },
-  },
-
-  // ── 4. P&L Hit Block ───────────────────────────────────────────
-  pnlHit: {
-    MTD: {
-      soldCars:          { count: 486, pnl: -52_00_000,  avgLoss: -10700 },
-      provisionedCars:   { count: 142, provisionAmt: -38_00_000, note: "Reduces as cars sell" },
-      returnedCars:      { count: 18,  provisionAmt: -4_50_000 },
-      smcSoldCars:       { count: 64,  pnl: -7_10_000 },
-      leadFeeRevenue:    { amount: 12_50_000 },
-      ninetyPlusSoldReversal: { count: 28, reversalAmt: 8_20_000 },
-    },
-    LMTD: {
-      soldCars:          { count: 520, pnl: -48_00_000,  avgLoss: -9230 },
-      provisionedCars:   { count: 165, provisionAmt: -42_00_000, note: "Reduces as cars sell" },
-      returnedCars:      { count: 22,  provisionAmt: -5_20_000 },
-      smcSoldCars:       { count: 74,  pnl: -6_75_000 },
-      leadFeeRevenue:    { amount: 14_00_000 },
-      ninetyPlusSoldReversal: { count: 32, reversalAmt: 9_50_000 },
-    },
-  },
-};
-
-// ═════════════════════════════════════════════════════════════════════
 //  MAIN APP
 // ═════════════════════════════════════════════════════════════════════
 export default function App() {
@@ -259,17 +133,11 @@ export default function App() {
   const [fileName, setFileName] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const [history, setHistory] = useState([]);
-  const [currentUser, setCurrentUser] = useState(() => localStorage.getItem("c24_user") || "");
+  const [currentUser, setCurrentUser] = useState("");
 
-  // Settings
-  const [slackUrl, setSlackUrl] = useState(() => localStorage.getItem("c24_slack_url") || "");
-  const [sheetUrl, setSheetUrl] = useState(() => localStorage.getItem("c24_sheet_url") || "");
-  const [managerEmail, setManagerEmail] = useState(() => localStorage.getItem("c24_mgr_email") || "");
-
-  useEffect(() => { localStorage.setItem("c24_slack_url", slackUrl); }, [slackUrl]);
-  useEffect(() => { localStorage.setItem("c24_sheet_url", sheetUrl); }, [sheetUrl]);
-  useEffect(() => { localStorage.setItem("c24_mgr_email", managerEmail); }, [managerEmail]);
-  useEffect(() => { localStorage.setItem("c24_user", currentUser); }, [currentUser]);
+  const [slackUrl, setSlackUrl] = useState("");
+  const [sheetUrl, setSheetUrl] = useState("");
+  const [managerEmail, setManagerEmail] = useState("");
 
   const handleFile = (file) => {
     if (!file) return;
@@ -288,11 +156,7 @@ export default function App() {
   };
 
   const onDrop = (e) => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer?.files?.[0]); };
-  const browse = () => {
-    const i = document.createElement("input");
-    i.type = "file"; i.accept = ".xlsx,.xls,.csv";
-    i.onchange = (e) => handleFile(e.target.files?.[0]); i.click();
-  };
+  const browse = () => { const i = document.createElement("input"); i.type = "file"; i.accept = ".xlsx,.xls,.csv"; i.onchange = (e) => handleFile(e.target.files?.[0]); i.click(); };
 
   const pendingEsc = history.filter((h) => h.status === "ESCALATED").length;
 
@@ -302,16 +166,14 @@ export default function App() {
     { id: "history", icon: "📜", label: "Quote History" },
     { id: "dashboard", icon: "📊", label: "P&L Management" },
     { id: "auction", icon: "🔨", label: "Auction Console" },
-    { id: "bizsnapshot", icon: "📈", label: "Business Snapshot" },
-    { id: "invsnapshot", icon: "🔍", label: "Inventory Snapshot" },
+    { id: "bizsnapshot", icon: "📈", label: "Biz Snapshot" },
+    { id: "invsnapshot", icon: "🔍", label: "Inv Snapshot" },
     { id: "settings", icon: "⚙️", label: "Settings" },
   ];
 
   return (
     <div style={S.app}>
       <style>{CSS}</style>
-
-      {/* HEADER */}
       <header style={S.header}>
         <div style={S.hLeft}>
           <div style={S.logo}>C24</div>
@@ -323,71 +185,52 @@ export default function App() {
         <nav style={S.nav}>
           {TABS.map((t) => (
             <button key={t.id} onClick={() => setTab(t.id)} style={tab === t.id ? S.navActive : S.navBtn}>
-              <span style={{ marginRight: 6 }}>{t.icon}</span>{t.label}
+              <span style={{ marginRight: 4 }}>{t.icon}</span>{t.label}
               {t.badge ? <span style={S.tabBadge}>{t.badge}</span> : null}
             </button>
           ))}
         </nav>
         <div style={S.hRight}>
-          <input
-            style={S.userInp}
-            placeholder="Your name..."
-            value={currentUser}
-            onChange={(e) => setCurrentUser(e.target.value)}
-          />
+          <input style={S.userInp} placeholder="Your name..." value={currentUser} onChange={(e) => setCurrentUser(e.target.value)} />
           {rows && (
             <div style={S.fileBadge}>
-              <span style={{ color: "#10B981" }}>✓</span> {fileName.length > 20 ? fileName.slice(0, 18) + "…" : fileName}
+              <span style={{ color: "#10B981" }}>✓</span> {fileName.length > 18 ? fileName.slice(0, 16) + "…" : fileName}
               <button onClick={() => { setRows(null); setFileName(""); }} style={S.removeBtn}>✕</button>
             </div>
           )}
         </div>
       </header>
 
-      {/* UPLOAD */}
-      {!rows && tab !== "settings" && tab !== "dashboard" && tab !== "bizsnapshot" && (
+      {!rows && !["settings", "dashboard", "bizsnapshot"].includes(tab) && (
         <div style={S.uploadWrap}>
           <div style={{ ...S.dropzone, ...(dragOver ? S.dzHover : {}) }}
             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
             onDrop={onDrop} onClick={browse}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>{dragOver ? "📥" : "📂"}</div>
-            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6, color: "#0F172A" }}>
-              {dragOver ? "Drop it here!" : "Upload Stuck Inventory"}
-            </div>
+            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6, color: "#0F172A" }}>{dragOver ? "Drop it here!" : "Upload Stuck Inventory"}</div>
             <div style={{ color: "#64748B", fontSize: 14, marginBottom: 16 }}>Drag & drop .xlsx / .csv, or click to browse</div>
             <div style={S.uploadBtn}>Choose File</div>
-            <div style={{ color: "#94A3B8", fontSize: 12, marginTop: 16 }}>Data stays in your browser</div>
           </div>
         </div>
       )}
 
-      {/* CONTENT */}
       <main style={S.main}>
         {rows && tab === "inventory" && <InventoryTab rows={rows} />}
-        {rows && tab === "quotes" && (
-          <QuoteTab rows={rows} history={history} setHistory={setHistory}
-            slackUrl={slackUrl} sheetUrl={sheetUrl} managerEmail={managerEmail} currentUser={currentUser} />
-        )}
+        {rows && tab === "quotes" && <QuoteTab rows={rows} history={history} setHistory={setHistory} slackUrl={slackUrl} sheetUrl={sheetUrl} managerEmail={managerEmail} currentUser={currentUser} />}
         {tab === "history" && <HistoryTab history={history} />}
         {tab === "dashboard" && <PnlManagementTab />}
-        {rows && tab === "auction" && (
-          <AuctionTab rows={rows} slackUrl={slackUrl} sheetUrl={sheetUrl} managerEmail={managerEmail} currentUser={currentUser} />
-        )}
+        {rows && tab === "auction" && <AuctionTab rows={rows} slackUrl={slackUrl} sheetUrl={sheetUrl} managerEmail={managerEmail} currentUser={currentUser} />}
         {tab === "bizsnapshot" && <BusinessSnapshotTab />}
         {rows && tab === "invsnapshot" && <InventorySnapshotTab rows={rows} />}
-        {tab === "settings" && (
-          <SettingsTab slackUrl={slackUrl} setSlackUrl={setSlackUrl}
-            sheetUrl={sheetUrl} setSheetUrl={setSheetUrl}
-            managerEmail={managerEmail} setManagerEmail={setManagerEmail} />
-        )}
+        {tab === "settings" && <SettingsTab slackUrl={slackUrl} setSlackUrl={setSlackUrl} sheetUrl={sheetUrl} setSheetUrl={setSheetUrl} managerEmail={managerEmail} setManagerEmail={setManagerEmail} />}
       </main>
     </div>
   );
 }
 
 // ═════════════════════════════════════════════════════════════════════
-//  TAB 1 — STUCK INVENTORY
+//  STUCK INVENTORY TAB
 // ═════════════════════════════════════════════════════════════════════
 function InventoryTab({ rows }) {
   const [search, setSearch] = useState("");
@@ -406,120 +249,68 @@ function InventoryTab({ rows }) {
     if (ageF !== "ALL") f = f.filter((r) => r.AGE_BUCKET === ageF);
     if (search) {
       const s = search.toLowerCase();
-      f = f.filter((r) =>
-        String(r.LEAD_ID || "").toLowerCase().includes(s) ||
-        String(r.MAKE || "").toLowerCase().includes(s) ||
-        String(r.MODEL || "").toLowerCase().includes(s) ||
-        String(r["Reg No"] || "").toLowerCase().includes(s));
+      f = f.filter((r) => String(r.LEAD_ID||"").toLowerCase().includes(s) || String(r.MAKE||"").toLowerCase().includes(s) || String(r.MODEL||"").toLowerCase().includes(s) || String(r["Reg No"]||"").toLowerCase().includes(s));
     }
     return f;
   }, [rows, regionF, ageF, search]);
 
   const pg = filtered.slice(page * PG, (page + 1) * PG);
   const tp = Math.ceil(filtered.length / PG);
-
   const stats = useMemo(() => {
     const bp = filtered.reduce((s, r) => s + (toNum(r.BUYING_PRICE) || 0), 0);
-    const c2d = filtered.filter((r) => truthy(r["C2D Flag"])).length;
-    const ri = filtered.filter((r) => truthy(r["RI Pending"])).length;
-    const as = filtered.filter((r) => truthy(r["Auction Stop"])).length;
-    return { n: filtered.length, bp, c2d, ri, as, av: filtered.length ? bp / filtered.length : 0 };
+    return { n: filtered.length, bp, av: filtered.length ? bp / filtered.length : 0, c2d: filtered.filter(r => truthy(r["C2D Flag"])).length, ri: filtered.filter(r => truthy(r["RI Pending"])).length, as: filtered.filter(r => truthy(r["Auction Stop"])).length };
   }, [filtered]);
 
   return (
     <div>
-      {/* Metrics */}
       <div style={S.metrics}>
-        {[
-          { l: "Total Cars", v: stats.n.toLocaleString(), c: "#3B82F6" },
-          { l: "Buying Value", v: INR(stats.bp), c: "#F59E0B" },
-          { l: "Avg Buying Price", v: INR(stats.av), c: "#8B5CF6" },
-          { l: "C2D Flagged", v: stats.c2d.toLocaleString(), c: "#10B981" },
-          { l: "RI Pending", v: stats.ri.toLocaleString(), c: "#EF4444" },
-          { l: "Auction Stop", v: stats.as.toLocaleString(), c: "#F97316" },
-        ].map((m) => (
-          <div key={m.l} style={S.mCard}>
-            <div style={{ fontSize: 22, fontWeight: 900, color: m.c, letterSpacing: "-0.5px" }}>{m.v}</div>
-            <div style={S.mLabel}>{m.l}</div>
-          </div>
+        {[{l:"Total Cars",v:stats.n.toLocaleString(),c:"#3B82F6"},{l:"Buying Value",v:INR(stats.bp),c:"#F59E0B"},{l:"Avg BP",v:INR(stats.av),c:"#8B5CF6"},{l:"C2D",v:stats.c2d,c:"#10B981"},{l:"RI Pending",v:stats.ri,c:"#EF4444"},{l:"Auction Stop",v:stats.as,c:"#F97316"}].map(m=>(
+          <div key={m.l} style={S.mCard}><div style={{ fontSize: 22, fontWeight: 900, color: m.c }}>{m.v}</div><div style={S.mLabel}>{m.l}</div></div>
         ))}
       </div>
-
-      {/* Filters */}
       <div style={S.filters}>
-        <input style={S.searchBox} placeholder="🔍  Search App ID, Make, Model, Reg No…"
-          value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} />
-        <select style={S.sel} value={regionF} onChange={(e) => { setRegionF(e.target.value); setPage(0); }}>
-          {regions.map((r) => <option key={r} value={r}>{r === "ALL" ? "📍 All Regions" : r}</option>)}
-        </select>
-        <select style={S.sel} value={ageF} onChange={(e) => { setAgeF(e.target.value); setPage(0); }}>
-          {ages.map((a) => <option key={a} value={a}>{a === "ALL" ? "📅 All Buckets" : a}</option>)}
-        </select>
-        <span style={S.fCount}>{filtered.length.toLocaleString()} of {rows.length.toLocaleString()}</span>
+        <input style={S.searchBox} placeholder="🔍 Search App ID, Make, Model…" value={search} onChange={e => { setSearch(e.target.value); setPage(0); }} />
+        <select style={S.sel} value={regionF} onChange={e => { setRegionF(e.target.value); setPage(0); }}>{regions.map(r => <option key={r} value={r}>{r === "ALL" ? "📍 All Regions" : r}</option>)}</select>
+        <select style={S.sel} value={ageF} onChange={e => { setAgeF(e.target.value); setPage(0); }}>{ages.map(a => <option key={a} value={a}>{a === "ALL" ? "📅 All Buckets" : a}</option>)}</select>
+        <span style={S.fCount}>{filtered.length} of {rows.length}</span>
       </div>
-
-      {/* Table */}
-      <div style={S.tWrap}>
-        <div style={S.tScroll}>
-          <table style={S.table}>
-            <thead>
-              <tr>
-                <th style={{ ...S.th, width: 50 }}>#</th>
-                {INVENTORY_COLS.map((c) => <th key={c.key} style={S.th}>{c.label}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {pg.map((row, i) => (
-                <tr key={i} className="tr">
-                  <td style={{ ...S.td, color: "#94A3B8", fontSize: 12 }}>{page * PG + i + 1}</td>
-                  <td style={S.td}>
-                    <button style={S.leadBtn} onClick={() => setDetailCar(row)}>
-                      {row.LEAD_ID || "—"}
-                    </button>
-                  </td>
-                  <td style={{ ...S.td, fontWeight: 600, color: "#0F172A" }}>
-                    {row.MAKE || ""} {row.MODEL || ""}
-                  </td>
-                  <td style={S.td}>{row.Year || "—"}</td>
-                  <td style={S.td}>
-                    <span style={S.bucketChip}>{row.AGE_BUCKET || "—"}</span>
-                  </td>
-                  <td style={{ ...S.td, textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
-                    {INR(toNum(row.BUYING_PRICE))}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div style={S.pag}>
-          <button style={S.pgB} disabled={page === 0} onClick={() => setPage(0)}>⟨⟨</button>
-          <button style={S.pgB} disabled={page === 0} onClick={() => setPage(page - 1)}>← Prev</button>
-          <span style={S.pgI}>Page <b>{page + 1}</b>/<b>{tp || 1}</b> · {page * PG + 1}–{Math.min((page + 1) * PG, filtered.length)} of {filtered.length.toLocaleString()}</span>
-          <button style={S.pgB} disabled={page >= tp - 1} onClick={() => setPage(page + 1)}>Next →</button>
-          <button style={S.pgB} disabled={page >= tp - 1} onClick={() => setPage(tp - 1)}>⟩⟩</button>
-        </div>
+      <div style={S.tWrap}><div style={S.tScroll}>
+        <table style={S.table}><thead><tr>
+          <th style={{ ...S.th, width: 50 }}>#</th>
+          {INVENTORY_COLS.map(c => <th key={c.key} style={S.th}>{c.label}</th>)}
+        </tr></thead><tbody>
+          {pg.map((row, i) => (
+            <tr key={i} className="tr">
+              <td style={{ ...S.td, color: "#94A3B8", fontSize: 12 }}>{page * PG + i + 1}</td>
+              <td style={S.td}><button style={S.leadBtn} onClick={() => setDetailCar(row)}>{row.LEAD_ID || "—"}</button></td>
+              <td style={{ ...S.td, fontWeight: 600, color: "#0F172A" }}>{row.MAKE} {row.MODEL}</td>
+              <td style={S.td}>{row.Year || "—"}</td>
+              <td style={S.td}><span style={S.bucketChip}>{row.AGE_BUCKET || "—"}</span></td>
+              <td style={{ ...S.td, textAlign: "right", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{INR(toNum(row.BUYING_PRICE))}</td>
+            </tr>
+          ))}
+        </tbody></table>
       </div>
-
-      {/* Detail Modal */}
+      <div style={S.pag}>
+        <button style={S.pgB} disabled={page === 0} onClick={() => setPage(0)}>⟨⟨</button>
+        <button style={S.pgB} disabled={page === 0} onClick={() => setPage(page - 1)}>← Prev</button>
+        <span style={S.pgI}>Page <b>{page + 1}</b>/<b>{tp || 1}</b></span>
+        <button style={S.pgB} disabled={page >= tp - 1} onClick={() => setPage(page + 1)}>Next →</button>
+        <button style={S.pgB} disabled={page >= tp - 1} onClick={() => setPage(tp - 1)}>⟩⟩</button>
+      </div></div>
       {detailCar && <CarDetailModal car={detailCar} onClose={() => setDetailCar(null)} />}
     </div>
   );
 }
 
-// ── Car Detail Modal ─────────────────────────────────────────────────
 function CarDetailModal({ car, onClose }) {
   return (
     <div style={S.modalBg} onClick={onClose}>
-      <div style={S.modal} onClick={(e) => e.stopPropagation()}>
+      <div style={S.modal} onClick={e => e.stopPropagation()}>
         <div style={S.modalHead}>
           <div>
-            <div style={{ fontSize: 24, fontWeight: 900, color: "#0F172A" }}>
-              {car.MAKE} {car.MODEL}
-            </div>
-            <div style={{ fontSize: 13, color: "#64748B", marginTop: 4 }}>
-              {car.Year} · {car.fuel_type || "—"} · {car["Reg No"] || "—"}
-            </div>
+            <div style={{ fontSize: 24, fontWeight: 900, color: "#0F172A" }}>{car.MAKE} {car.MODEL}</div>
+            <div style={{ fontSize: 13, color: "#64748B", marginTop: 4 }}>{car.Year} · {car.fuel_type || "—"} · {car["Reg No"] || "—"}</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             <div style={{ textAlign: "right" }}>
@@ -529,22 +320,17 @@ function CarDetailModal({ car, onClose }) {
             <button style={S.closeBtn} onClick={onClose}>✕</button>
           </div>
         </div>
-
         <div style={{ padding: 24 }}>
-          {DETAIL_GROUPS.map((g) => (
+          {DETAIL_GROUPS.map(g => (
             <div key={g.title} style={{ marginBottom: 20 }}>
               <div style={S.groupTitle}>{g.title}</div>
               <div style={S.detailGrid}>
-                {g.fields.map(([key, label, isInr]) => {
-                  const raw = car[key];
-                  const val = isInr ? INR(toNum(raw)) : (raw || "—");
-                  return (
-                    <div key={key} style={S.detailItem}>
-                      <div style={S.detailLabel}>{label}</div>
-                      <div style={S.detailVal}>{String(val)}</div>
-                    </div>
-                  );
-                })}
+                {g.fields.map(([key, label, isInr]) => (
+                  <div key={key} style={S.detailItem}>
+                    <div style={S.detailLabel}>{label}</div>
+                    <div style={S.detailVal}>{isInr ? INR(toNum(car[key])) : String(car[key] || "—")}</div>
+                  </div>
+                ))}
               </div>
             </div>
           ))}
@@ -555,7 +341,7 @@ function CarDetailModal({ car, onClose }) {
 }
 
 // ═════════════════════════════════════════════════════════════════════
-//  TAB 2 — QUOTE SUBMISSION
+//  QUOTE SUBMISSION TAB
 // ═════════════════════════════════════════════════════════════════════
 function QuoteTab({ rows, history, setHistory, slackUrl, sheetUrl, managerEmail, currentUser }) {
   const [appId, setAppId] = useState("");
@@ -565,108 +351,43 @@ function QuoteTab({ rows, history, setHistory, slackUrl, sheetUrl, managerEmail,
   const [res, setRes] = useState(null);
   const [sending, setSending] = useState(false);
   const [viewMode, setViewMode] = useState("submit");
+  const escalated = history.filter(h => h.status === "ESCALATED");
 
-  const escalated = history.filter((h) => h.status === "ESCALATED");
-
-  const find = () => {
-    const id = appId.trim();
-    if (!id) return;
-    const f = rows.find((r) => String(r.LEAD_ID || "").trim() === id || String(r.CAR_ID || "").trim() === id);
-    if (f) { setCar(f); setMiss(false); setRes(null); } else { setCar(null); setMiss(true); }
-  };
+  const find = () => { const id = appId.trim(); if (!id) return; const f = rows.find(r => String(r.LEAD_ID||"").trim() === id); if (f) { setCar(f); setMiss(false); setRes(null); } else { setCar(null); setMiss(true); } };
 
   const submit = async () => {
-    if (!car || !q.amt) return;
-    if (!currentUser) { alert("Please enter your name in the top-right before submitting."); return; }
+    if (!car || !q.amt || !currentUser) return;
     setSending(true);
-    const bid = toNum(q.amt);
-    const buy = toNum(car.BUYING_PRICE) || 0;
-    const pnl = bid - buy;
-    const ageBucket = car.AGE_BUCKET || "";
-    const anchor = toNum(car.Anchor) || toNum(car.NEW_MSP) || 0;
-
-    const { status, reason } = evaluateQuote(bid, buy, ageBucket);
-
-    const entry = {
-      id: Date.now(), appId: car.LEAD_ID, make: car.MAKE, model: car.MODEL,
-      dealer: q.dealer, bid, msp: anchor, buy, pnl, ageBucket,
-      status, reason, region: car.REGION || "", anchor,
-      submittedBy: currentUser,
-      time: new Date().toLocaleString("en-IN"),
-      timestamp: Date.now(),
-      slackSent: false, sheetSent: false, auctionStarted: false,
-    };
-
-    setRes(entry);
-    setHistory((h) => [entry, ...h]);
-    setQ({ dealer: "", amt: "", notes: "" });
-    setSending(false);
+    const bid = toNum(q.amt), buy = toNum(car.BUYING_PRICE) || 0, pnl = bid - buy;
+    const { status, reason } = evaluateQuote(bid, buy, car.AGE_BUCKET || "");
+    const entry = { id: Date.now(), appId: car.LEAD_ID, make: car.MAKE, model: car.MODEL, dealer: q.dealer, bid, buy, pnl, ageBucket: car.AGE_BUCKET || "", status, reason, region: car.REGION || "", submittedBy: currentUser, time: new Date().toLocaleString("en-IN"), timestamp: Date.now(), auctionStarted: false };
+    setRes(entry); setHistory(h => [entry, ...h]); setQ({ dealer: "", amt: "", notes: "" }); setSending(false);
   };
 
-  const startAuction = async (entryId) => {
-    const entry = history.find((h) => h.id === entryId);
-    if (!entry) return;
-    const sheetRow = {
-      timestamp: new Date().toISOString(),
-      appointmentId: entry.appId,
-      region: entry.region,
-      anchorPrice: entry.bid,
-      auctionStartFor: entry.dealer,
-      submittedBy: entry.submittedBy,
-      email: managerEmail || "",
-      date: new Date().toLocaleDateString("en-IN"),
-    };
-    const sheetRes = await appendToSheet(sheetUrl, sheetRow);
-    if (slackUrl) {
-      await sendSlackMessage(slackUrl,
-        `:hammer: *AUCTION STARTED*\n*App:* ${entry.appId} | *Car:* ${entry.make} ${entry.model}\n*Dealer:* ${entry.dealer} | *Anchor:* ₹${entry.bid?.toLocaleString("en-IN")}\n*Started by:* ${entry.submittedBy}`
-      );
-    }
-    setHistory((h) => h.map((x) => x.id === entryId ? { ...x, auctionStarted: true, sheetSent: sheetRes.ok } : x));
-    if (res && res.id === entryId) setRes({ ...res, auctionStarted: true, sheetSent: sheetRes.ok });
+  const escalate = async (id) => {
+    const e = history.find(h => h.id === id); if (!e) return;
+    await sendSlackMessage(slackUrl, `:rotating_light: *ESCALATION*\n*Car:* ${e.make} ${e.model} | *App:* ${e.appId}\n*By:* ${e.submittedBy} | *Bid:* ₹${e.bid?.toLocaleString("en-IN")} | *P&L:* ₹${e.pnl?.toLocaleString("en-IN")}\n*Reason:* ${e.reason}`);
+    setHistory(h => h.map(x => x.id === id ? { ...x, status: "ESCALATED" } : x));
+    if (res?.id === id) setRes({ ...res, status: "ESCALATED" });
   };
-
-  const escalate = async (entryId) => {
-    const entry = history.find((h) => h.id === entryId);
-    if (!entry) return;
-    const msg = `:rotating_light: *ESCALATION: Needs Manual Approval*\n\n*Car:* ${entry.make} ${entry.model} | *App:* ${entry.appId}\n*Submitted By:* ${entry.submittedBy}\n*Dealer:* ${entry.dealer} | *Region:* ${entry.region}\n*Bid:* ₹${entry.bid?.toLocaleString("en-IN")} | *Buy:* ₹${entry.buy?.toLocaleString("en-IN")}\n*P&L:* ₹${entry.pnl?.toLocaleString("en-IN")} | *Bucket:* ${entry.ageBucket}\n*Reason:* ${entry.reason}`;
-    const r = await sendSlackMessage(slackUrl, msg);
-    setHistory((h) => h.map((x) => x.id === entryId ? { ...x, status: "ESCALATED", slackSent: r.ok } : x));
-    if (res && res.id === entryId) setRes({ ...res, status: "ESCALATED", slackSent: r.ok });
-  };
-
-  const manualApprove = async (entryId) => {
-    const entry = history.find((h) => h.id === entryId);
-    if (!entry) return;
-    if (slackUrl) {
-      await sendSlackMessage(slackUrl,
-        `:white_check_mark: *APPROVED by Manager*\n*App:* ${entry.appId} | *Car:* ${entry.make} ${entry.model} | *Bid:* ₹${entry.bid?.toLocaleString("en-IN")}`
-      );
-    }
-    setHistory((h) => h.map((x) => x.id === entryId ? { ...x, status: "MANAGER_APPROVED" } : x));
-  };
-  const manualReject = async (entryId) => {
-    const entry = history.find((h) => h.id === entryId);
-    if (slackUrl && entry) {
-      await sendSlackMessage(slackUrl,
-        `:x: *REJECTED by Manager*\n*App:* ${entry.appId} | *Car:* ${entry.make} ${entry.model} | *Bid:* ₹${entry.bid?.toLocaleString("en-IN")}`
-      );
-    }
-    setHistory((h) => h.map((x) => x.id === entryId ? { ...x, status: "MANAGER_REJECTED" } : x));
+  const manualApprove = async (id) => { setHistory(h => h.map(x => x.id === id ? { ...x, status: "MANAGER_APPROVED" } : x)); };
+  const manualReject = async (id) => { setHistory(h => h.map(x => x.id === id ? { ...x, status: "MANAGER_REJECTED" } : x)); };
+  const startAuction = async (id) => {
+    const e = history.find(h => h.id === id); if (!e) return;
+    await appendToSheet(sheetUrl, { timestamp: new Date().toISOString(), appointmentId: e.appId, region: e.region, anchorPrice: e.bid, submittedBy: e.submittedBy, email: managerEmail, date: new Date().toLocaleDateString("en-IN") });
+    setHistory(h => h.map(x => x.id === id ? { ...x, auctionStarted: true } : x));
+    if (res?.id === id) setRes({ ...res, auctionStarted: true });
   };
 
   const stCol = { AUTO_APPROVED: "#10B981", REJECTED: "#EF4444", ESCALATED: "#F59E0B", MANAGER_APPROVED: "#10B981", MANAGER_REJECTED: "#EF4444" };
-  const stIco = { AUTO_APPROVED: "✅", REJECTED: "❌", ESCALATED: "⚠️", MANAGER_APPROVED: "✅", MANAGER_REJECTED: "❌" };
-  const stLabel = { AUTO_APPROVED: "Auto Approved", REJECTED: "Rejected", ESCALATED: "Escalated", MANAGER_APPROVED: "Manager Approved", MANAGER_REJECTED: "Manager Rejected" };
-  const isApproved = (s) => s === "AUTO_APPROVED" || s === "MANAGER_APPROVED";
+  const stLabel = { AUTO_APPROVED: "Auto Approved", REJECTED: "Rejected", ESCALATED: "Escalated", MANAGER_APPROVED: "Mgr Approved", MANAGER_REJECTED: "Mgr Rejected" };
+  const isApproved = s => s === "AUTO_APPROVED" || s === "MANAGER_APPROVED";
 
   return (
     <div>
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         <button style={viewMode === "submit" ? S.navActive : S.navBtn} onClick={() => setViewMode("submit")}>💰 Submit Quote</button>
-        <button style={viewMode === "escalations" ? S.navActive : S.navBtn} onClick={() => setViewMode("escalations")}>
-          ⚠️ Escalations {escalated.length ? <span style={S.tabBadge}>{escalated.length}</span> : null}
-        </button>
+        <button style={viewMode === "escalations" ? S.navActive : S.navBtn} onClick={() => setViewMode("escalations")}>⚠️ Escalations {escalated.length ? <span style={S.tabBadge}>{escalated.length}</span> : null}</button>
       </div>
 
       {viewMode === "submit" && (
@@ -675,129 +396,65 @@ function QuoteTab({ rows, history, setHistory, slackUrl, sheetUrl, managerEmail,
             <div style={S.card}>
               <div style={S.cHead}>🔍 Find Car</div>
               <div style={{ display: "flex", gap: 10 }}>
-                <input style={{ ...S.inp, flex: 1 }} placeholder="Enter App ID…" value={appId}
-                  onChange={(e) => setAppId(e.target.value)} onKeyDown={(e) => e.key === "Enter" && find()} />
+                <input style={{ ...S.inp, flex: 1 }} placeholder="Enter App ID…" value={appId} onChange={e => setAppId(e.target.value)} onKeyDown={e => e.key === "Enter" && find()} />
                 <button style={S.pri} onClick={find}>Search</button>
               </div>
-              {miss && <div style={{ color: "#EF4444", fontSize: 13, marginTop: 10 }}>⚠ No car found with ID "{appId}"</div>}
+              {miss && <div style={{ color: "#EF4444", fontSize: 13, marginTop: 10 }}>⚠ Not found</div>}
             </div>
-
             {car && (
               <div style={S.card}>
                 <div style={S.carTop}>
-                  <div>
-                    <div style={S.carName}>{car.MAKE} {car.MODEL}</div>
-                    <div style={S.carSub}>{car.Year} · {car.fuel_type || "—"} · {car["Reg No"] || "—"}</div>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 10, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px" }}>App ID</div>
-                    <div style={{ fontSize: 20, fontWeight: 900, color: "#3B82F6" }}>{car.LEAD_ID}</div>
-                  </div>
-                </div>
-                <div style={{ padding: "10px 14px", background: "#FEF3C7", borderRadius: 8, marginBottom: 14, fontSize: 12, color: "#78350F" }}>
-                  <strong>Bucket: {car.AGE_BUCKET || "?"}</strong> —{" "}
-                  {String(car.AGE_BUCKET || "").includes("0-30") && "Max loss: ₹7,000"}
-                  {String(car.AGE_BUCKET || "").includes("30-60") && "Max loss: ₹2,500"}
-                  {String(car.AGE_BUCKET || "").includes("60-90") && "Max loss: -20%"}
-                  {String(car.AGE_BUCKET || "").includes("90") && !String(car.AGE_BUCKET || "").includes("60-90") && "Manual review required"}
+                  <div><div style={S.carName}>{car.MAKE} {car.MODEL}</div><div style={S.carSub}>{car.Year} · {car.fuel_type || "—"}</div></div>
+                  <div style={{ textAlign: "right" }}><div style={{ fontSize: 10, color: "#64748B", textTransform: "uppercase" }}>App ID</div><div style={{ fontSize: 20, fontWeight: 900, color: "#3B82F6" }}>{car.LEAD_ID}</div></div>
                 </div>
                 <div style={S.dGrid}>
-                  {[
-                    ["BUYING_PRICE", "Buying Price", true, "#F59E0B"],
-                    ["NEW_MSP", "MSP", true, "#10B981"],
-                    ["Anchor", "Anchor", true],
-                    ["TP", "Target Price", true],
-                    ["C24", "C24 Quote", true, "#3B82F6"],
-                    ["REGION", "Region"],
-                    ["PARKING_REGION", "Parking"],
-                    ["SI_AGE", "SI Age"],
-                    ["SALE_CANCEL_DATE", "Cancel Date"],
-                  ].map(([k, l, inr, hl]) => (
-                    <div key={k} style={S.dItem}>
-                      <div style={S.dLabel}>{l}</div>
-                      <div style={{ ...S.dVal, ...(hl ? { color: hl, fontWeight: 700 } : {}) }}>
-                        {inr ? INR(toNum(car[k])) : (car[k] || "—")}
-                      </div>
-                    </div>
+                  {[["BUYING_PRICE","Buy",true,"#F59E0B"],["NEW_MSP","MSP",true],["Anchor","Anchor",true],["AGE_BUCKET","Bucket"],["REGION","Region"],["SI_AGE","SI Age"]].map(([k,l,inr,hl]) => (
+                    <div key={k} style={S.dItem}><div style={S.dLabel}>{l}</div><div style={{ ...S.dVal, ...(hl?{color:hl,fontWeight:700}:{}) }}>{inr ? INR(toNum(car[k])) : (car[k]||"—")}</div></div>
                   ))}
                 </div>
               </div>
             )}
-
             {car && (
               <div style={S.card}>
-                <div style={S.cHead}>💰 Submit Dealer Quote</div>
-                {!currentUser && <div style={{ color: "#EF4444", fontSize: 12, marginBottom: 10 }}>⚠ Enter your name in the header first</div>}
+                <div style={S.cHead}>💰 Submit Quote</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                  <div>
-                    <label style={S.fLabel}>Dealer Name</label>
-                    <input style={S.inp} placeholder="Dealer name" value={q.dealer} onChange={(e) => setQ({ ...q, dealer: e.target.value })} />
-                  </div>
-                  <div>
-                    <label style={S.fLabel}>Bid Amount (₹)</label>
-                    <input style={S.inp} placeholder="e.g. 450000" value={q.amt} onChange={(e) => setQ({ ...q, amt: e.target.value })} />
-                  </div>
+                  <div><label style={S.fLabel}>Dealer</label><input style={S.inp} value={q.dealer} onChange={e => setQ({ ...q, dealer: e.target.value })} /></div>
+                  <div><label style={S.fLabel}>Bid (₹)</label><input style={S.inp} value={q.amt} onChange={e => setQ({ ...q, amt: e.target.value })} /></div>
                 </div>
-                <div style={{ marginTop: 12 }}>
-                  <label style={S.fLabel}>Notes</label>
-                  <textarea style={{ ...S.inp, minHeight: 50, resize: "vertical" }} value={q.notes} onChange={(e) => setQ({ ...q, notes: e.target.value })} />
-                </div>
-                <button style={{ ...S.pri, width: "100%", marginTop: 16, padding: "14px 0", fontSize: 15 }} onClick={submit} disabled={sending}>
-                  {sending ? "Processing…" : "Submit Quote →"}
-                </button>
+                <button style={{ ...S.pri, width: "100%", marginTop: 16, padding: "14px 0" }} onClick={submit} disabled={sending}>{sending ? "Processing…" : "Submit →"}</button>
               </div>
             )}
           </div>
-
           <div style={S.qlR}>
             {res && (
-              <div style={{ ...S.card, background: `${stCol[res.status]}0D`, border: `2px solid ${stCol[res.status]}55`, textAlign: "center" }}>
-                <div style={{ fontSize: 50, marginBottom: 4 }}>{stIco[res.status]}</div>
-                <div style={{ fontSize: 24, fontWeight: 900, color: stCol[res.status], letterSpacing: "0.5px" }}>{stLabel[res.status]}</div>
+              <div style={{ ...S.card, textAlign: "center", border: `2px solid ${stCol[res.status]}55`, background: `${stCol[res.status]}0D` }}>
+                <div style={{ fontSize: 24, fontWeight: 900, color: stCol[res.status] }}>{stLabel[res.status]}</div>
                 <div style={{ color: "#64748B", fontSize: 13, marginTop: 8 }}>{res.reason}</div>
-                <div style={{ marginTop: 12, display: "flex", justifyContent: "center", gap: 20, color: "#475569", fontSize: 13 }}>
-                  <span>Bid: <b style={{ color: "#0F172A" }}>{INR(res.bid)}</b></span>
-                  <span>Buy: <b style={{ color: "#0F172A" }}>{INR(res.buy)}</b></span>
-                  <span>P&L: <b style={{ color: res.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(res.pnl)}</b></span>
+                <div style={{ marginTop: 12, display: "flex", justifyContent: "center", gap: 16, fontSize: 13, color: "#475569" }}>
+                  <span>Bid: <b>{INR(res.bid)}</b></span><span>P&L: <b style={{ color: res.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(res.pnl)}</b></span>
                 </div>
-                {isApproved(res.status) && !res.auctionStarted && (
-                  <button style={{ ...S.pri, marginTop: 14, background: "#8B5CF6", padding: "10px 28px" }} onClick={() => startAuction(res.id)}>
-                    🔨 Start Auction
-                  </button>
-                )}
-                {res.auctionStarted && <div style={{ color: "#10B981", fontSize: 13, marginTop: 12, fontWeight: 700 }}>✅ Auction Started</div>}
-                {res.status === "REJECTED" && (
-                  <button style={{ ...S.pri, marginTop: 14, background: "#F59E0B", padding: "10px 28px" }} onClick={() => escalate(res.id)}>
-                    ⚠️ Escalate to Manager
-                  </button>
-                )}
+                {isApproved(res.status) && !res.auctionStarted && <button style={{ ...S.pri, marginTop: 14, background: "#8B5CF6" }} onClick={() => startAuction(res.id)}>🔨 Start Auction</button>}
+                {res.auctionStarted && <div style={{ color: "#10B981", fontWeight: 700, marginTop: 12 }}>✅ Auction Started</div>}
+                {res.status === "REJECTED" && <button style={{ ...S.pri, marginTop: 14, background: "#F59E0B" }} onClick={() => escalate(res.id)}>⚠️ Escalate</button>}
               </div>
             )}
-
             <div style={S.card}>
-              <div style={S.cHead}>📋 Recent Quotes ({history.length})</div>
-              {!history.length ? <div style={{ textAlign: "center", padding: "40px 0", color: "#94A3B8" }}>No quotes yet</div> : (
-                <div style={{ maxHeight: 450, overflowY: "auto" }}>
-                  {history.slice(0, 20).map((h) => (
+              <div style={S.cHead}>📋 Recent ({history.length})</div>
+              {!history.length ? <div style={{ textAlign: "center", padding: 40, color: "#94A3B8" }}>No quotes yet</div> :
+                <div style={{ maxHeight: 400, overflowY: "auto" }}>
+                  {history.slice(0, 20).map(h => (
                     <div key={h.id} style={S.hRow}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: "#0F172A" }}>{h.make} {h.model} <span style={{ color: "#94A3B8", fontSize: 12, fontWeight: 400 }}>#{h.appId}</span></div>
-                        <div style={{ color: "#64748B", fontSize: 12, marginTop: 2 }}>{h.submittedBy} → {h.dealer} · {h.time}</div>
-                      </div>
+                      <div style={{ flex: 1 }}><div style={{ fontWeight: 700, color: "#0F172A" }}>{h.make} {h.model} <span style={{ color: "#94A3B8", fontSize: 12 }}>#{h.appId}</span></div><div style={{ color: "#64748B", fontSize: 12 }}>{h.submittedBy} · {h.time}</div></div>
                       <div style={{ textAlign: "right" }}>
-                        <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: `${stCol[h.status]}1A`, color: stCol[h.status] }}>{stLabel[h.status]}</span>
+                        <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: `${stCol[h.status]}1A`, color: stCol[h.status] }}>{stLabel[h.status]}</span>
                         <div style={{ fontSize: 12, color: "#64748B", marginTop: 4 }}>Bid: {INR(h.bid)} · P&L: <span style={{ color: h.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(h.pnl)}</span></div>
-                        {isApproved(h.status) && !h.auctionStarted && (
-                          <button style={{ ...S.pri, marginTop: 6, background: "#8B5CF6", padding: "4px 10px", fontSize: 11 }} onClick={() => startAuction(h.id)}>
-                            🔨 Start Auction
-                          </button>
-                        )}
-                        {h.auctionStarted && <div style={{ fontSize: 10, color: "#10B981", marginTop: 4, fontWeight: 700 }}>✓ Auction Running</div>}
+                        {isApproved(h.status) && !h.auctionStarted && <button style={{ ...S.pri, marginTop: 4, background: "#8B5CF6", padding: "3px 8px", fontSize: 11 }} onClick={() => startAuction(h.id)}>🔨 Auction</button>}
+                        {h.auctionStarted && <div style={{ fontSize: 10, color: "#10B981", marginTop: 2 }}>✓ Running</div>}
                       </div>
                     </div>
                   ))}
                 </div>
-              )}
+              }
             </div>
           </div>
         </div>
@@ -805,29 +462,22 @@ function QuoteTab({ rows, history, setHistory, slackUrl, sheetUrl, managerEmail,
 
       {viewMode === "escalations" && (
         <div style={S.card}>
-          <div style={S.cHead}>⚠️ Pending Escalations ({escalated.length})</div>
-          {!escalated.length ? <div style={{ textAlign: "center", padding: "40px 0", color: "#94A3B8" }}>No pending escalations</div> : (
-            <div>
-              {escalated.map((h) => (
-                <div key={h.id} style={{ ...S.hRow, padding: "16px 0", gap: 16 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 16, color: "#0F172A" }}>{h.make} {h.model}</div>
-                    <div style={{ color: "#475569", fontSize: 13, marginTop: 4 }}>
-                      App: <b style={{ color: "#3B82F6" }}>{h.appId}</b> · Dealer: {h.dealer} · Region: {h.region} · By: {h.submittedBy}
-                    </div>
-                    <div style={{ color: "#475569", fontSize: 13, marginTop: 4 }}>
-                      Bid: <b>{INR(h.bid)}</b> · Buy: <b>{INR(h.buy)}</b> · P&L: <b style={{ color: h.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(h.pnl)}</b> · Bucket: {h.ageBucket}
-                    </div>
-                    <div style={{ color: "#F59E0B", fontSize: 12, marginTop: 4 }}>{h.reason}</div>
-                  </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button style={{ ...S.pri, background: "#10B981", padding: "10px 20px" }} onClick={() => manualApprove(h.id)}>✅ Approve</button>
-                    <button style={{ ...S.pri, background: "#EF4444", padding: "10px 20px" }} onClick={() => manualReject(h.id)}>❌ Reject</button>
-                  </div>
+          <div style={S.cHead}>⚠️ Pending ({escalated.length})</div>
+          {!escalated.length ? <div style={{ textAlign: "center", padding: 40, color: "#94A3B8" }}>None</div> :
+            escalated.map(h => (
+              <div key={h.id} style={{ ...S.hRow, padding: "16px 0" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 16, color: "#0F172A" }}>{h.make} {h.model}</div>
+                  <div style={{ color: "#475569", fontSize: 13, marginTop: 4 }}>App: <b style={{ color: "#3B82F6" }}>{h.appId}</b> · {h.dealer} · {h.region} · By: {h.submittedBy}</div>
+                  <div style={{ color: "#475569", fontSize: 13, marginTop: 4 }}>Bid: <b>{INR(h.bid)}</b> · Buy: <b>{INR(h.buy)}</b> · P&L: <b style={{ color: h.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(h.pnl)}</b></div>
                 </div>
-              ))}
-            </div>
-          )}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button style={{ ...S.pri, background: "#10B981", padding: "10px 20px" }} onClick={() => manualApprove(h.id)}>✅ Approve</button>
+                  <button style={{ ...S.pri, background: "#EF4444", padding: "10px 20px" }} onClick={() => manualReject(h.id)}>❌ Reject</button>
+                </div>
+              </div>
+            ))
+          }
         </div>
       )}
     </div>
@@ -835,405 +485,329 @@ function QuoteTab({ rows, history, setHistory, slackUrl, sheetUrl, managerEmail,
 }
 
 // ═════════════════════════════════════════════════════════════════════
-//  TAB 3 — QUOTE HISTORY (filterable log)
+//  QUOTE HISTORY TAB
 // ═════════════════════════════════════════════════════════════════════
 function HistoryTab({ history }) {
   const [memberF, setMemberF] = useState("ALL");
   const [bucketF, setBucketF] = useState("ALL");
   const [regionF, setRegionF] = useState("ALL");
   const [statusF, setStatusF] = useState("ALL");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
 
-  const members = useMemo(() => ["ALL", ...new Set(history.map((h) => h.submittedBy).filter(Boolean))].sort(), [history]);
-  const buckets = useMemo(() => ["ALL", ...new Set(history.map((h) => h.ageBucket).filter(Boolean))], [history]);
-  const regions = useMemo(() => ["ALL", ...new Set(history.map((h) => h.region).filter(Boolean))].sort(), [history]);
+  const members = useMemo(() => ["ALL", ...new Set(history.map(h => h.submittedBy).filter(Boolean))].sort(), [history]);
+  const buckets = useMemo(() => ["ALL", ...new Set(history.map(h => h.ageBucket).filter(Boolean))], [history]);
+  const regions = useMemo(() => ["ALL", ...new Set(history.map(h => h.region).filter(Boolean))].sort(), [history]);
 
   const filtered = useMemo(() => {
     let f = history;
-    if (memberF !== "ALL") f = f.filter((h) => h.submittedBy === memberF);
-    if (bucketF !== "ALL") f = f.filter((h) => h.ageBucket === bucketF);
-    if (regionF !== "ALL") f = f.filter((h) => h.region === regionF);
-    if (statusF !== "ALL") f = f.filter((h) => h.status === statusF);
-    if (dateFrom) { const t = new Date(dateFrom).getTime(); f = f.filter((h) => h.timestamp >= t); }
-    if (dateTo) { const t = new Date(dateTo).getTime() + 86400000; f = f.filter((h) => h.timestamp <= t); }
+    if (memberF !== "ALL") f = f.filter(h => h.submittedBy === memberF);
+    if (bucketF !== "ALL") f = f.filter(h => h.ageBucket === bucketF);
+    if (regionF !== "ALL") f = f.filter(h => h.region === regionF);
+    if (statusF !== "ALL") f = f.filter(h => h.status === statusF);
     return f;
-  }, [history, memberF, bucketF, regionF, statusF, dateFrom, dateTo]);
+  }, [history, memberF, bucketF, regionF, statusF]);
 
   const stCol = { AUTO_APPROVED: "#10B981", REJECTED: "#EF4444", ESCALATED: "#F59E0B", MANAGER_APPROVED: "#10B981", MANAGER_REJECTED: "#EF4444" };
-  const stLabel = { AUTO_APPROVED: "Auto Approved", REJECTED: "Rejected", ESCALATED: "Escalated", MANAGER_APPROVED: "Mgr Approved", MANAGER_REJECTED: "Mgr Rejected" };
-
-  const stats = useMemo(() => {
-    const n = filtered.length;
-    const approved = filtered.filter((h) => h.status === "AUTO_APPROVED" || h.status === "MANAGER_APPROVED").length;
-    const totalPnL = filtered.reduce((s, h) => s + (h.pnl || 0), 0);
-    return { n, approved, totalPnL, rate: n ? (approved / n * 100).toFixed(0) : 0 };
-  }, [filtered]);
+  const stLabel = { AUTO_APPROVED: "Approved", REJECTED: "Rejected", ESCALATED: "Escalated", MANAGER_APPROVED: "Mgr OK", MANAGER_REJECTED: "Mgr No" };
+  const stats = useMemo(() => { const n = filtered.length, ap = filtered.filter(h => h.status === "AUTO_APPROVED" || h.status === "MANAGER_APPROVED").length, pnl = filtered.reduce((s, h) => s + (h.pnl || 0), 0); return { n, ap, pnl, rate: n ? (ap / n * 100).toFixed(0) : 0 }; }, [filtered]);
 
   return (
     <div>
       <div style={S.metrics}>
-        <div style={S.mCard}><div style={{ fontSize: 22, fontWeight: 900, color: "#3B82F6" }}>{stats.n}</div><div style={S.mLabel}>Total Quotes</div></div>
-        <div style={S.mCard}><div style={{ fontSize: 22, fontWeight: 900, color: "#10B981" }}>{stats.approved}</div><div style={S.mLabel}>Approved</div></div>
-        <div style={S.mCard}><div style={{ fontSize: 22, fontWeight: 900, color: "#8B5CF6" }}>{stats.rate}%</div><div style={S.mLabel}>Approval Rate</div></div>
-        <div style={S.mCard}><div style={{ fontSize: 22, fontWeight: 900, color: stats.totalPnL >= 0 ? "#10B981" : "#EF4444" }}>{INR(stats.totalPnL)}</div><div style={S.mLabel}>Total P&L</div></div>
+        <div style={S.mCard}><div style={{ fontSize: 22, fontWeight: 900, color: "#3B82F6" }}>{stats.n}</div><div style={S.mLabel}>Total</div></div>
+        <div style={S.mCard}><div style={{ fontSize: 22, fontWeight: 900, color: "#10B981" }}>{stats.ap}</div><div style={S.mLabel}>Approved</div></div>
+        <div style={S.mCard}><div style={{ fontSize: 22, fontWeight: 900, color: "#8B5CF6" }}>{stats.rate}%</div><div style={S.mLabel}>Rate</div></div>
+        <div style={S.mCard}><div style={{ fontSize: 22, fontWeight: 900, color: stats.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(stats.pnl)}</div><div style={S.mLabel}>P&L</div></div>
       </div>
-
       <div style={S.filters}>
-        <select style={S.sel} value={memberF} onChange={(e) => setMemberF(e.target.value)}>
-          {members.map((m) => <option key={m} value={m}>{m === "ALL" ? "👤 All Members" : m}</option>)}
-        </select>
-        <select style={S.sel} value={bucketF} onChange={(e) => setBucketF(e.target.value)}>
-          {buckets.map((b) => <option key={b} value={b}>{b === "ALL" ? "📅 All Buckets" : b}</option>)}
-        </select>
-        <select style={S.sel} value={regionF} onChange={(e) => setRegionF(e.target.value)}>
-          {regions.map((r) => <option key={r} value={r}>{r === "ALL" ? "📍 All Regions" : r}</option>)}
-        </select>
-        <select style={S.sel} value={statusF} onChange={(e) => setStatusF(e.target.value)}>
-          <option value="ALL">📊 All Status</option>
-          <option value="AUTO_APPROVED">Auto Approved</option>
-          <option value="MANAGER_APPROVED">Manager Approved</option>
-          <option value="REJECTED">Rejected</option>
-          <option value="ESCALATED">Escalated</option>
-          <option value="MANAGER_REJECTED">Mgr Rejected</option>
-        </select>
-        <input type="date" style={S.sel} value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-        <span style={{ color: "#64748B" }}>to</span>
-        <input type="date" style={S.sel} value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+        <select style={S.sel} value={memberF} onChange={e => setMemberF(e.target.value)}>{members.map(m => <option key={m} value={m}>{m === "ALL" ? "👤 All" : m}</option>)}</select>
+        <select style={S.sel} value={bucketF} onChange={e => setBucketF(e.target.value)}>{buckets.map(b => <option key={b} value={b}>{b === "ALL" ? "📅 All" : b}</option>)}</select>
+        <select style={S.sel} value={regionF} onChange={e => setRegionF(e.target.value)}>{regions.map(r => <option key={r} value={r}>{r === "ALL" ? "📍 All" : r}</option>)}</select>
+        <select style={S.sel} value={statusF} onChange={e => setStatusF(e.target.value)}><option value="ALL">📊 All Status</option><option value="AUTO_APPROVED">Approved</option><option value="REJECTED">Rejected</option><option value="ESCALATED">Escalated</option></select>
         <span style={S.fCount}>{filtered.length} of {history.length}</span>
       </div>
-
-      <div style={S.tWrap}>
-        <div style={S.tScroll}>
-          <table style={S.table}>
-            <thead><tr>
-              {["Time", "Member", "App ID", "Car", "Dealer", "Region", "Bucket", "Bid", "Buy", "P&L", "Status"].map((h) => <th key={h} style={S.th}>{h}</th>)}
-            </tr></thead>
-            <tbody>
-              {filtered.length === 0 && (
-                <tr><td colSpan={11} style={{ ...S.td, textAlign: "center", padding: 40, color: "#94A3B8" }}>No quotes match these filters</td></tr>
-              )}
-              {filtered.map((h) => (
-                <tr key={h.id} className="tr">
-                  <td style={{ ...S.td, fontSize: 11, color: "#64748B" }}>{h.time}</td>
-                  <td style={{ ...S.td, fontWeight: 600 }}>{h.submittedBy || "—"}</td>
-                  <td style={{ ...S.td, color: "#3B82F6", fontWeight: 600 }}>{h.appId}</td>
-                  <td style={S.td}>{h.make} {h.model}</td>
-                  <td style={S.td}>{h.dealer}</td>
-                  <td style={S.td}>{h.region || "—"}</td>
-                  <td style={S.td}><span style={S.bucketChip}>{h.ageBucket || "—"}</span></td>
-                  <td style={{ ...S.td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{INR(h.bid)}</td>
-                  <td style={{ ...S.td, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{INR(h.buy)}</td>
-                  <td style={{ ...S.td, textAlign: "right", fontVariantNumeric: "tabular-nums", color: h.pnl >= 0 ? "#10B981" : "#EF4444", fontWeight: 700 }}>{INR(h.pnl)}</td>
-                  <td style={S.td}>
-                    <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: `${stCol[h.status]}1A`, color: stCol[h.status] }}>{stLabel[h.status]}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <div style={S.tWrap}><div style={S.tScroll}>
+        <table style={S.table}><thead><tr>
+          {["Time","Member","App ID","Car","Dealer","Region","Bucket","Bid","Buy","P&L","Status"].map(h => <th key={h} style={S.th}>{h}</th>)}
+        </tr></thead><tbody>
+          {!filtered.length && <tr><td colSpan={11} style={{ ...S.td, textAlign: "center", padding: 40, color: "#94A3B8" }}>No quotes</td></tr>}
+          {filtered.map(h => (
+            <tr key={h.id} className="tr">
+              <td style={{ ...S.td, fontSize: 11, color: "#64748B" }}>{h.time}</td>
+              <td style={{ ...S.td, fontWeight: 600 }}>{h.submittedBy || "—"}</td>
+              <td style={{ ...S.td, color: "#3B82F6", fontWeight: 600 }}>{h.appId}</td>
+              <td style={S.td}>{h.make} {h.model}</td>
+              <td style={S.td}>{h.dealer}</td>
+              <td style={S.td}>{h.region || "—"}</td>
+              <td style={S.td}><span style={S.bucketChip}>{h.ageBucket || "—"}</span></td>
+              <td style={{ ...S.td, textAlign: "right" }}>{INR(h.bid)}</td>
+              <td style={{ ...S.td, textAlign: "right" }}>{INR(h.buy)}</td>
+              <td style={{ ...S.td, textAlign: "right", color: h.pnl >= 0 ? "#10B981" : "#EF4444", fontWeight: 700 }}>{INR(h.pnl)}</td>
+              <td style={S.td}><span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: `${stCol[h.status]}1A`, color: stCol[h.status] }}>{stLabel[h.status]}</span></td>
+            </tr>
+          ))}
+        </tbody></table>
+      </div></div>
     </div>
   );
 }
 
 
+
 // ═════════════════════════════════════════════════════════════════════
-//  TAB 4 — P&L MANAGEMENT
-//  ┌─────────────────────────────────────────────────────────────────┐
-//  │  Sections:                                                      │
-//  │  1. Bucket-wise Opening Inv & Sold (filterable: zone/channel/T) │
-//  │  2. SBND — Sold But Not Delivered pipeline                      │
-//  │  3. Same Month Cancelled (sold + SBND)                          │
-//  │  4. P&L Hit breakdown blocks                                    │
-//  └─────────────────────────────────────────────────────────────────┘
+//  P&L MANAGEMENT — DUMMY DATA
+//  Structured to mirror actual Cars24 stuck-inventory ops metrics.
+//  Replace with API/query calls later.
 // ═════════════════════════════════════════════════════════════════════
+//  TAB 4 — P&L MANAGEMENT (v2 — matches actual Cars24 report format)
+// ═════════════════════════════════════════════════════════════════════
+const PNL_DATA = {
+  stockOut: {
+    MTD: [
+      { bucket:"0-30",   openInv:285, sold:125, openASP:258491, soldASP:223386, loss:139,      lossPct:0.1 },
+      { bucket:"30-60",  openInv:372, sold:136, openASP:284185, soldASP:235665, loss:-16871,   lossPct:-7.2 },
+      { bucket:"60-90",  openInv:161, sold:81,  openASP:308918, soldASP:342672, loss:-61415,   lossPct:-17.9 },
+      { bucket:"90-120", openInv:68,  sold:24,  openASP:311967, soldASP:303005, loss:-70154,   lossPct:-23.2 },
+      { bucket:"120-150",openInv:33,  sold:5,   openASP:242986, soldASP:217767, loss:-67267,   lossPct:-30.9 },
+      { bucket:"150-180",openInv:29,  sold:7,   openASP:273802, soldASP:339863, loss:-132649,  lossPct:-39.0 },
+      { bucket:"180+",   openInv:348, sold:14,  openASP:368545, soldASP:317035, loss:-146850,  lossPct:-46.3 },
+    ],
+    LMTD: [
+      { bucket:"0-30",   openInv:310, sold:138, openASP:255000, soldASP:220000, loss:520,      lossPct:0.2 },
+      { bucket:"30-60",  openInv:395, sold:148, openASP:280000, soldASP:232000, loss:-18200,   lossPct:-7.8 },
+      { bucket:"60-90",  openInv:175, sold:88,  openASP:305000, soldASP:338000, loss:-58000,   lossPct:-16.5 },
+      { bucket:"90-120", openInv:72,  sold:28,  openASP:308000, soldASP:298000, loss:-68000,   lossPct:-22.1 },
+      { bucket:"120-150",openInv:38,  sold:6,   openASP:248000, soldASP:220000, loss:-62000,   lossPct:-28.2 },
+      { bucket:"150-180",openInv:32,  sold:8,   openASP:270000, soldASP:335000, loss:-128000,  lossPct:-37.5 },
+      { bucket:"180+",   openInv:360, sold:16,  openASP:365000, soldASP:312000, loss:-142000,  lossPct:-44.8 },
+    ],
+  },
+  sbnd: {
+    MTD: [
+      { bucket:"0-30",   count:41, sbndASP:322144, loss:3932,    lossPct:1.2 },
+      { bucket:"30-60",  count:70, sbndASP:348856, loss:-11759,  lossPct:-3.4 },
+      { bucket:"60-90",  count:24, sbndASP:347959, loss:-65739,  lossPct:-18.9 },
+      { bucket:"90-120", count:6,  sbndASP:364474, loss:-102417, lossPct:-28.1 },
+      { bucket:"120-150",count:3,  sbndASP:176734, loss:-53067,  lossPct:-30.0 },
+      { bucket:"150-180",count:1,  sbndASP:201587, loss:-61087,  lossPct:-30.3 },
+      { bucket:"180+",   count:9,  sbndASP:434018, loss:-169349, lossPct:-39.0 },
+    ],
+    LMTD: [
+      { bucket:"0-30",   count:48, sbndASP:318000, loss:4200,    lossPct:1.3 },
+      { bucket:"30-60",  count:75, sbndASP:345000, loss:-10500,  lossPct:-3.0 },
+      { bucket:"60-90",  count:28, sbndASP:342000, loss:-62000,  lossPct:-17.8 },
+      { bucket:"90-120", count:8,  sbndASP:358000, loss:-98000,  lossPct:-26.5 },
+      { bucket:"120-150",count:4,  sbndASP:182000, loss:-50000,  lossPct:-28.0 },
+      { bucket:"150-180",count:2,  sbndASP:198000, loss:-58000,  lossPct:-29.1 },
+      { bucket:"180+",   count:10, sbndASP:428000, loss:-165000, lossPct:-38.2 },
+    ],
+  },
+  smc: {
+    MTD: {
+      sold: [
+        { bucket:"0-30", sold:28, openASP:275000, soldASP:268000, loss:-1_40_000, lossPct:-1.82 },
+        { bucket:"30-60", sold:18, openASP:288000, soldASP:272000, loss:-1_80_000, lossPct:-3.47 },
+        { bucket:"60-90", sold:12, openASP:305000, soldASP:280000, loss:-2_10_000, lossPct:-5.74 },
+        { bucket:"90+", sold:6, openASP:340000, soldASP:295000, loss:-1_80_000, lossPct:-8.82 },
+      ],
+      sbnd: [
+        { bucket:"0-30", count:15, sbndASP:280000, loss:1200, lossPct:0.4 },
+        { bucket:"30-60", count:10, sbndASP:292000, loss:-8500, lossPct:-2.9 },
+        { bucket:"60-90", count:6, sbndASP:310000, loss:-42000, lossPct:-13.5 },
+        { bucket:"90+", count:3, sbndASP:345000, loss:-85000, lossPct:-24.6 },
+      ],
+    },
+    LMTD: {
+      sold: [
+        { bucket:"0-30", sold:32, openASP:270000, soldASP:265000, loss:-1_20_000, lossPct:-1.38 },
+        { bucket:"30-60", sold:20, openASP:282000, soldASP:268000, loss:-1_50_000, lossPct:-2.66 },
+        { bucket:"60-90", sold:14, openASP:300000, soldASP:275000, loss:-1_95_000, lossPct:-4.64 },
+        { bucket:"90+", sold:8, openASP:335000, soldASP:290000, loss:-2_10_000, lossPct:-7.84 },
+      ],
+      sbnd: [
+        { bucket:"0-30", count:18, sbndASP:275000, loss:1500, lossPct:0.5 },
+        { bucket:"30-60", count:12, sbndASP:285000, loss:-7800, lossPct:-2.7 },
+        { bucket:"60-90", count:8, sbndASP:302000, loss:-38000, lossPct:-12.6 },
+        { bucket:"90+", count:4, sbndASP:338000, loss:-80000, lossPct:-23.7 },
+      ],
+    },
+  },
+  pnlHit: {
+    MTD: {
+      soldCars:        { count:392, pnl:-31266*392, avgLoss:-31266 },
+      provisionedCars: { count:142, provisionAmt:-38_00_000 },
+      returnedCars:    { count:18, provisionAmt:-4_50_000 },
+      smcSoldCars:     { count:64, pnl:-7_10_000 },
+      leadFeeRevenue:  { amount:12_50_000, cars:392 },
+      ninetyPlusSoldReversal: { count:28, reversalAmt:8_20_000 },
+      depreciationCost: 2_40_000,
+      parkingCost: 1_80_000,
+      transportCost: 95_000,
+    },
+    LMTD: {
+      soldCars:        { count:432, pnl:-28500*432, avgLoss:-28500 },
+      provisionedCars: { count:165, provisionAmt:-42_00_000 },
+      returnedCars:    { count:22, provisionAmt:-5_20_000 },
+      smcSoldCars:     { count:74, pnl:-6_75_000 },
+      leadFeeRevenue:  { amount:14_00_000, cars:432 },
+      ninetyPlusSoldReversal: { count:32, reversalAmt:9_50_000 },
+      depreciationCost: 2_60_000,
+      parkingCost: 1_95_000,
+      transportCost: 1_05_000,
+    },
+  },
+};
+
 function PnlManagementTab() {
-  const [period, setPeriod] = useState("MTD"); // MTD | LMTD | custom
+  const [period, setPeriod] = useState("MTD");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  // Section 1 filters
-  const [zoneF, setZoneF] = useState("All");
-  const [channelF, setChannelF] = useState("All");
-  const [teslaF, setTeslaF] = useState("All");
-  // Which sub-section is expanded
-  const [section, setSection] = useState("inventory"); // inventory | sbnd | smc | pnlhit
+  const [section, setSection] = useState("stockout");
 
   const D = PNL_DATA;
-  const p = period === "LMTD" ? "LMTD" : "MTD"; // custom falls back to MTD for now
+  const p = period === "LMTD" ? "LMTD" : "MTD";
 
-  // ── Section 1: Aggregate bucket-wise data with filters ────────
-  const bucketRows = useMemo(() => {
-    let data = D.bucketWise[p] || [];
-    if (zoneF !== "All") data = data.filter((r) => r.zone === zoneF);
-    if (channelF !== "All") data = data.filter((r) => r.channel === channelF);
-    if (teslaF !== "All") data = data.filter((r) => String(r.tesla) === teslaF);
-    // Group by bucket
-    const map = {};
-    for (const r of data) {
-      if (!map[r.bucket]) map[r.bucket] = { bucket: r.bucket, openingInv: 0, openingBP: 0, soldCars: 0, soldBP: 0, pnl: 0 };
-      const m = map[r.bucket];
-      m.openingInv += r.openingInv;
-      m.openingBP += r.openingAvgBP * r.openingInv;
-      m.soldCars += r.soldCars;
-      m.soldBP += r.soldAvgBP * r.soldCars;
-      m.pnl += r.pnl;
-    }
-    return sortBuckets(Object.keys(map)).map((b) => {
-      const m = map[b];
-      m.openingAvgBP = m.openingInv ? Math.round(m.openingBP / m.openingInv) : 0;
-      m.soldAvgBP = m.soldCars ? Math.round(m.soldBP / m.soldCars) : 0;
-      m.pnlPct = m.soldBP ? (m.pnl / m.soldBP) * 100 : 0;
-      return m;
-    });
-  }, [D, p, zoneF, channelF, teslaF]);
-
-  const invTotals = useMemo(() => {
-    const t = { openingInv: 0, soldCars: 0, openingBP: 0, soldBP: 0, pnl: 0 };
-    for (const r of bucketRows) {
-      t.openingInv += r.openingInv; t.soldCars += r.soldCars;
-      t.openingBP += r.openingAvgBP * r.openingInv;
-      t.soldBP += r.soldAvgBP * r.soldCars;
-      t.pnl += r.pnl;
-    }
-    t.openingAvgBP = t.openingInv ? Math.round(t.openingBP / t.openingInv) : 0;
-    t.soldAvgBP = t.soldCars ? Math.round(t.soldBP / t.soldCars) : 0;
-    t.pnlPct = t.soldBP ? (t.pnl / t.soldBP) * 100 : 0;
+  // ── STOCK OUT aggregation ─────────────────────────────────────
+  const soData = D.stockOut[p] || [];
+  const soTotals = useMemo(() => {
+    const t = { openInv:0, sold:0, openBP:0, soldBP:0, loss:0 };
+    for (const r of soData) { t.openInv+=r.openInv; t.sold+=r.sold; t.openBP+=r.openASP*r.openInv; t.soldBP+=r.soldASP*r.sold; t.loss+=r.loss; }
+    t.openASP = t.openInv ? Math.round(t.openBP/t.openInv) : 0;
+    t.soldASP = t.sold ? Math.round(t.soldBP/t.sold) : 0;
+    t.soldPct = t.openInv ? ((t.sold/t.openInv)*100).toFixed(2)+"%" : "0%";
+    t.lossPct = t.soldBP ? ((t.loss/t.soldBP)*100).toFixed(1)+"%" : "0%";
+    t.aspRatio = t.openASP ? (t.soldASP/t.openASP).toFixed(2) : "—";
     return t;
-  }, [bucketRows]);
+  }, [soData]);
 
-  // ── Section 2: SBND ───────────────────────────────────────────
+  // ── SBND aggregation ──────────────────────────────────────────
   const sbndData = D.sbnd[p] || [];
-  const sbndTotal = useMemo(() => {
-    const t = { count: 0, bp: 0, bid: 0 };
-    for (const r of sbndData) { t.count += r.count; t.bp += r.avgBP * r.count; t.bid += r.avgDealerBid * r.count; }
-    t.avgBP = t.count ? Math.round(t.bp / t.count) : 0;
-    t.avgBid = t.count ? Math.round(t.bid / t.count) : 0;
+  const sbndTotals = useMemo(() => {
+    const t = { count:0, bp:0, loss:0 };
+    for (const r of sbndData) { t.count+=r.count; t.bp+=r.sbndASP*r.count; t.loss+=r.loss; }
+    t.sbndASP = t.count ? Math.round(t.bp/t.count) : 0;
+    t.sbndPct = soTotals.openInv ? ((t.count/soTotals.openInv)*100).toFixed(2)+"%" : "—";
+    t.lossPct = t.bp ? ((t.loss/t.bp)*100).toFixed(2)+"%" : "0%";
+    t.aspRatio = soTotals.openASP ? (t.sbndASP/soTotals.openASP).toFixed(2) : "—";
     return t;
-  }, [sbndData]);
+  }, [sbndData, soTotals]);
 
-  // ── Section 3: SMC ────────────────────────────────────────────
-  const smcSold = D.smc[p]?.sold || [];
-  const smcSbnd = D.smc[p]?.sbnd || [];
-
-  // ── Section 4: P&L Hit ────────────────────────────────────────
+  // ── P&L Hit ───────────────────────────────────────────────────
   const hit = D.pnlHit[p] || D.pnlHit.MTD;
-  const totalPnLHit = (hit.soldCars?.pnl || 0) + (hit.provisionedCars?.provisionAmt || 0) + (hit.returnedCars?.provisionAmt || 0) + (hit.smcSoldCars?.pnl || 0) + (hit.leadFeeRevenue?.amount || 0) + (hit.ninetyPlusSoldReversal?.reversalAmt || 0);
+  const grossPnL = (hit.soldCars?.pnl||0);
+  const netPnL = grossPnL + (hit.provisionedCars?.provisionAmt||0) + (hit.returnedCars?.provisionAmt||0) + (hit.smcSoldCars?.pnl||0) + (hit.leadFeeRevenue?.amount||0) + (hit.ninetyPlusSoldReversal?.reversalAmt||0);
+  const totalCosts = (hit.depreciationCost||0) + (hit.parkingCost||0) + (hit.transportCost||0);
+  const finalPnL = netPnL - totalCosts;
 
   const sectionBtns = [
-    { id: "inventory", icon: "📦", label: "Inventory & Sold" },
-    { id: "sbnd", icon: "🚛", label: "SBND Pipeline" },
-    { id: "smc", icon: "🔄", label: "Same Month Cancelled" },
-    { id: "pnlhit", icon: "💰", label: "P&L Hit" },
+    { id:"stockout", icon:"📦", label:"Stock Out" },
+    { id:"sbnd", icon:"🚛", label:"SBND" },
+    { id:"smc", icon:"🔄", label:"Same Month Cancelled" },
+    { id:"pnlhit", icon:"💰", label:"P&L Hit" },
   ];
+
+  // Table header style matching screenshot (dark blue header)
+  const tHead = { padding:"10px 14px", textAlign:"right", fontWeight:700, color:"#FFF", background:"#1E3A5F", fontSize:11, textTransform:"uppercase", letterSpacing:".3px", whiteSpace:"nowrap", position:"sticky", top:0, zIndex:2 };
+  const tHeadL = { ...tHead, textAlign:"left" };
+  const tCell = { padding:"9px 14px", borderBottom:"1px solid #E2E8F0", whiteSpace:"nowrap", color:"#0F172A", fontSize:13, textAlign:"right", fontVariantNumeric:"tabular-nums" };
+  const tCellL = { ...tCell, textAlign:"left", fontWeight:600 };
+  const tTotalCell = { ...tCell, fontWeight:900, background:"#F1F5F9", color:"#0F172A" };
+  const tTotalCellL = { ...tTotalCell, textAlign:"left" };
+  const lossColor = (v) => v > 0 ? "#10B981" : v < 0 ? "#EF4444" : "#0F172A";
 
   return (
     <div>
-      {/* ── Period selector ─────────────────────────────────────── */}
-      <div style={{ ...S.card, marginBottom: 16, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: 6 }}>
-          {["MTD", "LMTD", "Custom"].map((pr) => (
-            <button key={pr} onClick={() => setPeriod(pr === "Custom" ? "custom" : pr)} style={{
-              padding: "9px 20px", borderRadius: 8,
-              border: period === (pr === "Custom" ? "custom" : pr) ? "2px solid #3B82F6" : "2px solid #E2E8F0",
-              background: period === (pr === "Custom" ? "custom" : pr) ? "#EFF6FF" : "#FFF",
-              color: period === (pr === "Custom" ? "custom" : pr) ? "#1D4ED8" : "#64748B",
-              fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+      {/* Period selector */}
+      <div style={{ ...S.card, marginBottom:16, display:"flex", alignItems:"center", gap:16, flexWrap:"wrap" }}>
+        <div style={{ display:"flex", gap:6 }}>
+          {["MTD","LMTD","Custom"].map(pr=>(
+            <button key={pr} onClick={()=>setPeriod(pr==="Custom"?"custom":pr)} style={{
+              padding:"9px 20px", borderRadius:8, border: period===(pr==="Custom"?"custom":pr)?"2px solid #1E3A5F":"2px solid #E2E8F0",
+              background: period===(pr==="Custom"?"custom":pr)?"#EFF6FF":"#FFF", color: period===(pr==="Custom"?"custom":pr)?"#1E3A5F":"#64748B",
+              fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit",
             }}>{pr}</button>
           ))}
         </div>
-        {period === "custom" && (
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input type="date" style={S.sel} value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-            <span style={{ color: "#64748B" }}>to</span>
-            <input type="date" style={S.sel} value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+        {period==="custom"&&(
+          <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+            <input type="date" style={S.sel} value={dateFrom} onChange={e=>setDateFrom(e.target.value)} />
+            <span style={{ color:"#64748B" }}>to</span>
+            <input type="date" style={S.sel} value={dateTo} onChange={e=>setDateTo(e.target.value)} />
           </div>
         )}
-        <div style={{ marginLeft: "auto", padding: "8px 16px", background: "#FEF3C7", borderRadius: 8, fontSize: 12, color: "#78350F", fontWeight: 600 }}>
-          ⚠️ Showing dummy data — will connect to live query later
+        <div style={{ marginLeft:"auto", padding:"6px 14px", background:"#FEF3C7", borderRadius:8, fontSize:11, color:"#78350F", fontWeight:600 }}>
+          ⚠️ Dummy data — connect to live query later
         </div>
       </div>
 
-      {/* ── Section nav ─────────────────────────────────────────── */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 20 }}>
-        {sectionBtns.map((s) => (
-          <button key={s.id} onClick={() => setSection(s.id)} style={{
-            padding: "10px 18px", borderRadius: 8,
-            border: section === s.id ? "2px solid #3B82F6" : "1px solid #E2E8F0",
-            background: section === s.id ? "#EFF6FF" : "#FFF",
-            color: section === s.id ? "#1D4ED8" : "#64748B",
-            fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
-          }}><span style={{ marginRight: 6 }}>{s.icon}</span>{s.label}</button>
+      {/* Section nav */}
+      <div style={{ display:"flex", gap:6, marginBottom:20 }}>
+        {sectionBtns.map(s=>(
+          <button key={s.id} onClick={()=>setSection(s.id)} style={{
+            padding:"10px 18px", borderRadius:8,
+            border: section===s.id ? "2px solid #1E3A5F" : "1px solid #E2E8F0",
+            background: section===s.id ? "#EFF6FF" : "#FFF",
+            color: section===s.id ? "#1E3A5F" : "#64748B",
+            fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit",
+          }}><span style={{ marginRight:6 }}>{s.icon}</span>{s.label}</button>
         ))}
       </div>
 
-      {/* ═══════ SECTION 1: Inventory & Sold ═══════ */}
-      {section === "inventory" && (
-        <div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-            <select style={S.sel} value={zoneF} onChange={(e) => setZoneF(e.target.value)}>
-              <option value="All">🌐 All Zones</option>
-              <option value="North">North</option>
-              <option value="South">South</option>
-            </select>
-            <select style={S.sel} value={channelF} onChange={(e) => setChannelF(e.target.value)}>
-              <option value="All">📡 All Channels</option>
-              <option value="C2D">C2D</option>
-              <option value="C2B">C2B</option>
-            </select>
-            <select style={S.sel} value={teslaF} onChange={(e) => setTeslaF(e.target.value)}>
-              <option value="All">⚡ Tesla: All</option>
-              <option value="1">Tesla Only</option>
-              <option value="0">Non-Tesla</option>
-            </select>
-            <span style={{ marginLeft: "auto", fontSize: 12, color: "#64748B", fontWeight: 600 }}>
-              Period: <b style={{ color: "#0F172A" }}>{period === "custom" ? `${dateFrom || "?"} → ${dateTo || "?"}` : period}</b>
-            </span>
-          </div>
-
-          {/* Summary cards */}
-          <div style={S.metrics}>
-            <div style={S.mCard}><div style={{ fontSize: 24, fontWeight: 900, color: "#3B82F6" }}>{invTotals.openingInv.toLocaleString()}</div><div style={S.mLabel}>Opening Inventory</div></div>
-            <div style={S.mCard}><div style={{ fontSize: 24, fontWeight: 900, color: "#10B981" }}>{invTotals.soldCars.toLocaleString()}</div><div style={S.mLabel}>Cars Sold</div></div>
-            <div style={S.mCard}><div style={{ fontSize: 24, fontWeight: 900, color: "#F59E0B" }}>{INR(invTotals.openingAvgBP)}</div><div style={S.mLabel}>Avg Opening BP</div></div>
-            <div style={S.mCard}><div style={{ fontSize: 24, fontWeight: 900, color: "#8B5CF6" }}>{INR(invTotals.soldAvgBP)}</div><div style={S.mLabel}>Avg Sold BP</div></div>
-            <div style={S.mCard}><div style={{ fontSize: 24, fontWeight: 900, color: invTotals.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(invTotals.pnl)}</div><div style={S.mLabel}>Total P&L</div></div>
-            <div style={S.mCard}><div style={{ fontSize: 24, fontWeight: 900, color: invTotals.pnlPct >= 0 ? "#10B981" : "#EF4444" }}>{invTotals.pnlPct.toFixed(1)}%</div><div style={S.mLabel}>P&L %</div></div>
-          </div>
-
-          {/* Table */}
-          <div style={S.tWrap}>
-            <table style={S.table}>
-              <thead><tr>
-                {["SI Bucket", "Opening Inv", "Opening Avg BP", "Sold Cars", "Sold Avg BP", "P&L", "P&L %"].map((h) => <th key={h} style={S.th}>{h}</th>)}
-              </tr></thead>
-              <tbody>
-                {bucketRows.map((r) => (
-                  <tr key={r.bucket} className="tr">
-                    <td style={S.td}><span style={S.bucketChip}>{r.bucket}</span></td>
-                    <td style={{ ...S.td, fontWeight: 700 }}>{r.openingInv.toLocaleString()}</td>
-                    <td style={{ ...S.td, fontVariantNumeric: "tabular-nums" }}>{INR(r.openingAvgBP)}</td>
-                    <td style={{ ...S.td, fontWeight: 700, color: "#10B981" }}>{r.soldCars.toLocaleString()}</td>
-                    <td style={{ ...S.td, fontVariantNumeric: "tabular-nums" }}>{INR(r.soldAvgBP)}</td>
-                    <td style={{ ...S.td, fontWeight: 700, color: r.pnl >= 0 ? "#10B981" : "#EF4444", fontVariantNumeric: "tabular-nums" }}>{INR(r.pnl)}</td>
-                    <td style={{ ...S.td, fontWeight: 700, color: r.pnlPct >= 0 ? "#10B981" : "#EF4444" }}>{r.pnlPct.toFixed(1)}%</td>
-                  </tr>
-                ))}
-                {/* Totals row */}
-                <tr style={{ background: "#F8FAFC" }}>
-                  <td style={{ ...S.td, fontWeight: 900, color: "#0F172A" }}>TOTAL</td>
-                  <td style={{ ...S.td, fontWeight: 900 }}>{invTotals.openingInv.toLocaleString()}</td>
-                  <td style={{ ...S.td, fontWeight: 900 }}>{INR(invTotals.openingAvgBP)}</td>
-                  <td style={{ ...S.td, fontWeight: 900, color: "#10B981" }}>{invTotals.soldCars.toLocaleString()}</td>
-                  <td style={{ ...S.td, fontWeight: 900 }}>{INR(invTotals.soldAvgBP)}</td>
-                  <td style={{ ...S.td, fontWeight: 900, color: invTotals.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(invTotals.pnl)}</td>
-                  <td style={{ ...S.td, fontWeight: 900, color: invTotals.pnlPct >= 0 ? "#10B981" : "#EF4444" }}>{invTotals.pnlPct.toFixed(1)}%</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* ═══════ SECTION 2: SBND ═══════ */}
-      {section === "sbnd" && (
+      {/* ═══════ STOCK OUT ═══════ */}
+      {section==="stockout"&&(
         <div>
           <div style={S.metrics}>
-            <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: "#F59E0B" }}>{sbndTotal.count}</div><div style={S.mLabel}>Total SBND Cars</div></div>
-            <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: "#3B82F6" }}>{INR(sbndTotal.avgBP)}</div><div style={S.mLabel}>Avg Buying Price</div></div>
-            <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: "#8B5CF6" }}>{INR(sbndTotal.avgBid)}</div><div style={S.mLabel}>Avg Dealer Bid</div></div>
-            <div style={S.mCard}><div style={{ fontSize: 28, fontWeight: 900, color: "#EF4444" }}>{INR(sbndTotal.avgBid - sbndTotal.avgBP)}</div><div style={S.mLabel}>Avg P&L / Car</div></div>
+            <div style={S.mCard}><div style={{ fontSize:24, fontWeight:900, color:"#1E3A5F" }}>{soTotals.openInv.toLocaleString()}</div><div style={S.mLabel}>Opening Inventory</div></div>
+            <div style={S.mCard}><div style={{ fontSize:24, fontWeight:900, color:"#10B981" }}>{soTotals.sold.toLocaleString()}</div><div style={S.mLabel}>Abs Sold</div></div>
+            <div style={S.mCard}><div style={{ fontSize:24, fontWeight:900, color:"#3B82F6" }}>{soTotals.soldPct}</div><div style={S.mLabel}>Sold %</div></div>
+            <div style={S.mCard}><div style={{ fontSize:24, fontWeight:900, color:lossColor(soTotals.loss) }}>{INR(soTotals.loss)}</div><div style={S.mLabel}>Total Loss</div></div>
+            <div style={S.mCard}><div style={{ fontSize:24, fontWeight:900, color:"#8B5CF6" }}>{soTotals.aspRatio}</div><div style={S.mLabel}>ASP Ratio</div></div>
           </div>
-          <div style={{ ...S.card, marginTop: 4 }}>
-            <div style={S.cHead}>🚛 SBND — Sold But Not Delivered (Stock-out Pipeline)</div>
-            <div style={{ color: "#64748B", fontSize: 13, marginBottom: 14 }}>
-              Cars with verified dealer bid, pending physical stock-out. Pipeline indicator for upcoming deliveries.
+          <div style={{ ...S.card, padding:0, overflow:"hidden" }}>
+            <div style={{ padding:"12px 20px", background:"#1E3A5F", color:"#FFF", fontWeight:800, fontSize:14, display:"flex", justifyContent:"space-between" }}>
+              <span>STOCK_OUT</span>
+              <span style={{ fontSize:12, opacity:0.8 }}>{p} · {new Date().toLocaleDateString("en-IN",{month:"short",year:"numeric"})}</span>
             </div>
-            <table style={S.table}>
-              <thead><tr>
-                {["SI Bucket", "SBND Cars", "Avg Buying Price", "Avg Dealer Bid", "Δ (Bid − BP)", "Avg Days Since Sale"].map((h) => <th key={h} style={S.th}>{h}</th>)}
-              </tr></thead>
-              <tbody>
-                {sbndData.map((r) => (
-                  <tr key={r.bucket} className="tr">
-                    <td style={S.td}><span style={S.bucketChip}>{r.bucket}</span></td>
-                    <td style={{ ...S.td, fontWeight: 800, fontSize: 16, color: "#0F172A" }}>{r.count}</td>
-                    <td style={{ ...S.td, fontVariantNumeric: "tabular-nums" }}>{INR(r.avgBP)}</td>
-                    <td style={{ ...S.td, fontVariantNumeric: "tabular-nums" }}>{INR(r.avgDealerBid)}</td>
-                    <td style={{ ...S.td, fontWeight: 700, color: (r.avgDealerBid - r.avgBP) >= 0 ? "#10B981" : "#EF4444", fontVariantNumeric: "tabular-nums" }}>
-                      {INR(r.avgDealerBid - r.avgBP)}
-                    </td>
-                    <td style={S.td}>{r.daysSinceSale.toFixed(1)} days</td>
-                  </tr>
-                ))}
-                <tr style={{ background: "#F8FAFC" }}>
-                  <td style={{ ...S.td, fontWeight: 900 }}>TOTAL</td>
-                  <td style={{ ...S.td, fontWeight: 900, fontSize: 16 }}>{sbndTotal.count}</td>
-                  <td style={{ ...S.td, fontWeight: 900 }}>{INR(sbndTotal.avgBP)}</td>
-                  <td style={{ ...S.td, fontWeight: 900 }}>{INR(sbndTotal.avgBid)}</td>
-                  <td style={{ ...S.td, fontWeight: 900, color: (sbndTotal.avgBid - sbndTotal.avgBP) >= 0 ? "#10B981" : "#EF4444" }}>{INR(sbndTotal.avgBid - sbndTotal.avgBP)}</td>
-                  <td style={S.td}>—</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* ═══════ SECTION 3: Same Month Cancelled ═══════ */}
-      {section === "smc" && (
-        <div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-            {/* SMC Sold */}
-            <div style={S.card}>
-              <div style={S.cHead}>🔄 SMC — Sold Cars</div>
-              <div style={{ color: "#64748B", fontSize: 13, marginBottom: 14 }}>Cars cancelled and re-sold within the same month</div>
-              <table style={S.table}>
+            <div style={{ overflowX:"auto" }}>
+              <table style={{ ...S.table, fontSize:13 }}>
                 <thead><tr>
-                  {["Bucket", "Cars", "Avg BP", "P&L", "P&L %"].map((h) => <th key={h} style={S.th}>{h}</th>)}
+                  <th style={tHeadL}>SI_BUCKET</th>
+                  <th style={tHead}>Opening Inv Count</th>
+                  <th style={tHead}>Abs Sold</th>
+                  <th style={tHead}>Sold %</th>
+                  <th style={tHead}>Opening Inv ASP</th>
+                  <th style={tHead}>Sold ASP</th>
+                  <th style={tHead}>Loss</th>
+                  <th style={tHead}>Loss%</th>
+                  <th style={tHead}>ASP Ratio</th>
                 </tr></thead>
                 <tbody>
-                  {smcSold.map((r) => (
-                    <tr key={r.bucket} className="tr">
-                      <td style={S.td}><span style={S.bucketChip}>{r.bucket}</span></td>
-                      <td style={{ ...S.td, fontWeight: 700 }}>{r.count}</td>
-                      <td style={{ ...S.td, fontVariantNumeric: "tabular-nums" }}>{INR(r.avgBP)}</td>
-                      <td style={{ ...S.td, fontWeight: 700, color: r.pnl >= 0 ? "#10B981" : "#EF4444" }}>{INR(r.pnl)}</td>
-                      <td style={{ ...S.td, color: r.pnlPct >= 0 ? "#10B981" : "#EF4444" }}>{r.pnlPct.toFixed(1)}%</td>
-                    </tr>
-                  ))}
-                  <tr style={{ background: "#F8FAFC" }}>
-                    <td style={{ ...S.td, fontWeight: 900 }}>TOTAL</td>
-                    <td style={{ ...S.td, fontWeight: 900 }}>{smcSold.reduce((s, r) => s + r.count, 0)}</td>
-                    <td style={S.td}>—</td>
-                    <td style={{ ...S.td, fontWeight: 900, color: "#EF4444" }}>{INR(smcSold.reduce((s, r) => s + r.pnl, 0))}</td>
-                    <td style={S.td}>—</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* SMC SBND */}
-            <div style={S.card}>
-              <div style={S.cHead}>🔄 SMC — SBND Cars</div>
-              <div style={{ color: "#64748B", fontSize: 13, marginBottom: 14 }}>Same-month cancelled cars still in SBND (pending stock-out)</div>
-              <table style={S.table}>
-                <thead><tr>
-                  {["Bucket", "Cars", "Avg BP"].map((h) => <th key={h} style={S.th}>{h}</th>)}
-                </tr></thead>
-                <tbody>
-                  {smcSbnd.map((r) => (
-                    <tr key={r.bucket} className="tr">
-                      <td style={S.td}><span style={S.bucketChip}>{r.bucket}</span></td>
-                      <td style={{ ...S.td, fontWeight: 700 }}>{r.count}</td>
-                      <td style={{ ...S.td, fontVariantNumeric: "tabular-nums" }}>{INR(r.avgBP)}</td>
-                    </tr>
-                  ))}
-                  <tr style={{ background: "#F8FAFC" }}>
-                    <td style={{ ...S.td, fontWeight: 900 }}>TOTAL</td>
-                    <td style={{ ...S.td, fontWeight: 900 }}>{smcSbnd.reduce((s, r) => s + r.count, 0)}</td>
-                    <td style={S.td}>—</td>
+                  {soData.map((r,i)=>{
+                    const soldPct = r.openInv ? ((r.sold/r.openInv)*100).toFixed(1)+"%" : "0%";
+                    const aspR = r.openASP ? (r.soldASP/r.openASP).toFixed(2) : "—";
+                    return (
+                      <tr key={r.bucket} style={{ background: i%2===0?"#FFF":"#F8FAFC" }}>
+                        <td style={tCellL}>{r.bucket}</td>
+                        <td style={tCell}>{r.openInv.toLocaleString()}</td>
+                        <td style={tCell}>{r.sold.toLocaleString()}</td>
+                        <td style={tCell}>{soldPct}</td>
+                        <td style={tCell}>{r.openASP.toLocaleString("en-IN")}</td>
+                        <td style={tCell}>{r.soldASP.toLocaleString("en-IN")}</td>
+                        <td style={{ ...tCell, color:lossColor(r.loss), fontWeight:700 }}>{r.loss.toLocaleString("en-IN")}</td>
+                        <td style={{ ...tCell, color:lossColor(r.lossPct), fontWeight:700 }}>{r.lossPct.toFixed(1)}%</td>
+                        <td style={tCell}>{aspR}</td>
+                      </tr>
+                    );
+                  })}
+                  <tr>
+                    <td style={tTotalCellL}>Total</td>
+                    <td style={tTotalCell}>{soTotals.openInv.toLocaleString()}</td>
+                    <td style={tTotalCell}>{soTotals.sold.toLocaleString()}</td>
+                    <td style={tTotalCell}>{soTotals.soldPct}</td>
+                    <td style={tTotalCell}>{soTotals.openASP.toLocaleString("en-IN")}</td>
+                    <td style={tTotalCell}>{soTotals.soldASP.toLocaleString("en-IN")}</td>
+                    <td style={{ ...tTotalCell, color:lossColor(soTotals.loss) }}>{soTotals.loss.toLocaleString("en-IN")}</td>
+                    <td style={{ ...tTotalCell, color:lossColor(parseFloat(soTotals.lossPct)) }}>{soTotals.lossPct}</td>
+                    <td style={tTotalCell}>{soTotals.aspRatio}</td>
                   </tr>
                 </tbody>
               </table>
@@ -1242,131 +816,217 @@ function PnlManagementTab() {
         </div>
       )}
 
-      {/* ═══════ SECTION 4: P&L Hit ═══════ */}
-      {section === "pnlhit" && (
+      {/* ═══════ SBND ═══════ */}
+      {section==="sbnd"&&(
         <div>
-          {/* Total P&L Hit banner */}
-          <div style={{ ...S.card, marginBottom: 20, textAlign: "center", padding: 28 }}>
-            <div style={{ fontSize: 12, color: "#64748B", textTransform: "uppercase", letterSpacing: "2px", fontWeight: 700 }}>Net P&L Hit ({p})</div>
-            <div style={{ fontSize: 36, fontWeight: 900, color: totalPnLHit >= 0 ? "#10B981" : "#EF4444", letterSpacing: "-1px", marginTop: 4 }}>
-              {INR(totalPnLHit)}
+          <div style={S.metrics}>
+            <div style={S.mCard}><div style={{ fontSize:24, fontWeight:900, color:"#F59E0B" }}>{sbndTotals.count}</div><div style={S.mLabel}>Total SBND</div></div>
+            <div style={S.mCard}><div style={{ fontSize:24, fontWeight:900, color:"#3B82F6" }}>{sbndTotals.sbndPct}</div><div style={S.mLabel}>SBND %</div></div>
+            <div style={S.mCard}><div style={{ fontSize:24, fontWeight:900, color:"#8B5CF6" }}>{INR(sbndTotals.sbndASP)}</div><div style={S.mLabel}>Avg SBND ASP</div></div>
+            <div style={S.mCard}><div style={{ fontSize:24, fontWeight:900, color:lossColor(sbndTotals.loss) }}>{INR(sbndTotals.loss)}</div><div style={S.mLabel}>Total Loss</div></div>
+            <div style={S.mCard}><div style={{ fontSize:24, fontWeight:900, color:"#8B5CF6" }}>{sbndTotals.aspRatio}</div><div style={S.mLabel}>ASP Ratio</div></div>
+          </div>
+          <div style={{ ...S.card, padding:0, overflow:"hidden" }}>
+            <div style={{ padding:"12px 20px", background:"#6B21A8", color:"#FFF", fontWeight:800, fontSize:14, display:"flex", justifyContent:"space-between" }}>
+              <span>SBND</span>
+              <span style={{ fontSize:12, opacity:0.8 }}>{p}</span>
             </div>
-            <div style={{ fontSize: 13, color: "#64748B", marginTop: 8 }}>
-              = Sold P&L + Provision + Returns + SMC Sold + Lead Fee + 90+ Reversal
+            <div style={{ overflowX:"auto" }}>
+              <table style={{ ...S.table, fontSize:13 }}>
+                <thead><tr>
+                  <th style={{ ...tHeadL, background:"#6B21A8" }}>SI_BUCKET</th>
+                  <th style={{ ...tHead, background:"#6B21A8" }}>SBND</th>
+                  <th style={{ ...tHead, background:"#6B21A8" }}>SBND%</th>
+                  <th style={{ ...tHead, background:"#6B21A8" }}>SBND ASP</th>
+                  <th style={{ ...tHead, background:"#6B21A8" }}>Loss</th>
+                  <th style={{ ...tHead, background:"#6B21A8" }}>Loss%</th>
+                  <th style={{ ...tHead, background:"#6B21A8" }}>ASP Ratio</th>
+                </tr></thead>
+                <tbody>
+                  {sbndData.map((r,i)=>{
+                    const sbndPct = soTotals.openInv ? ((r.count/soTotals.openInv)*100).toFixed(2)+"%" : "—";
+                    const aspR = soTotals.openASP ? (r.sbndASP/soTotals.openASP).toFixed(2) : "—";
+                    return (
+                      <tr key={r.bucket} style={{ background: i%2===0?"#FFF":"#FAF5FF" }}>
+                        <td style={tCellL}>{r.bucket}</td>
+                        <td style={tCell}>{r.count}</td>
+                        <td style={tCell}>{sbndPct}</td>
+                        <td style={tCell}>{r.sbndASP.toLocaleString("en-IN")}</td>
+                        <td style={{ ...tCell, color:lossColor(r.loss), fontWeight:700 }}>{r.loss.toLocaleString("en-IN")}</td>
+                        <td style={{ ...tCell, color:lossColor(r.lossPct), fontWeight:700 }}>{r.lossPct.toFixed(1)}%</td>
+                        <td style={tCell}>{aspR}</td>
+                      </tr>
+                    );
+                  })}
+                  <tr>
+                    <td style={tTotalCellL}></td>
+                    <td style={tTotalCell}>{sbndTotals.count}</td>
+                    <td style={tTotalCell}>{sbndTotals.sbndPct}</td>
+                    <td style={tTotalCell}>{sbndTotals.sbndASP.toLocaleString("en-IN")}</td>
+                    <td style={{ ...tTotalCell, color:lossColor(sbndTotals.loss) }}>{sbndTotals.loss.toLocaleString("en-IN")}</td>
+                    <td style={{ ...tTotalCell, color:lossColor(parseFloat(sbndTotals.lossPct)) }}>{sbndTotals.lossPct}</td>
+                    <td style={tTotalCell}>{sbndTotals.aspRatio}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
+        </div>
+      )}
 
-          {/* P&L component blocks */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-            {/* Sold Cars */}
-            <div style={{ ...S.card, borderTop: "3px solid #EF4444" }}>
-              <div style={{ fontSize: 11, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 }}>Sold Cars P&L</div>
-              <div style={{ fontSize: 28, fontWeight: 900, color: "#EF4444", marginTop: 8 }}>{INR(hit.soldCars.pnl)}</div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, padding: "10px 0", borderTop: "1px solid #F1F5F9" }}>
-                <div><div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>Cars Sold</div><div style={{ fontSize: 18, fontWeight: 800, color: "#0F172A" }}>{hit.soldCars.count}</div></div>
-                <div><div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>Avg Loss/Car</div><div style={{ fontSize: 18, fontWeight: 800, color: "#EF4444" }}>{INR(hit.soldCars.avgLoss)}</div></div>
-              </div>
-            </div>
-
-            {/* Provisioned Cars */}
-            <div style={{ ...S.card, borderTop: "3px solid #F59E0B" }}>
-              <div style={{ fontSize: 11, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 }}>Provision Amount</div>
-              <div style={{ fontSize: 28, fontWeight: 900, color: "#F59E0B", marginTop: 8 }}>{INR(hit.provisionedCars.provisionAmt)}</div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, padding: "10px 0", borderTop: "1px solid #F1F5F9" }}>
-                <div><div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>Provisioned Cars</div><div style={{ fontSize: 18, fontWeight: 800, color: "#0F172A" }}>{hit.provisionedCars.count}</div></div>
-                <div style={{ textAlign: "right" }}><div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>Per Car</div><div style={{ fontSize: 18, fontWeight: 800, color: "#F59E0B" }}>{INR(hit.provisionedCars.count ? hit.provisionedCars.provisionAmt / hit.provisionedCars.count : 0)}</div></div>
-              </div>
-              <div style={{ fontSize: 11, color: "#92400E", background: "#FEF3C7", padding: "6px 10px", borderRadius: 6, marginTop: 8 }}>
-                Reduces as cars get sold from inventory
-              </div>
-            </div>
-
-            {/* Returned Cars */}
-            <div style={{ ...S.card, borderTop: "3px solid #8B5CF6" }}>
-              <div style={{ fontSize: 11, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 }}>Returned Cars Provision</div>
-              <div style={{ fontSize: 28, fontWeight: 900, color: "#8B5CF6", marginTop: 8 }}>{INR(hit.returnedCars.provisionAmt)}</div>
-              <div style={{ marginTop: 12, padding: "10px 0", borderTop: "1px solid #F1F5F9" }}>
-                <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>Returned Cars</div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: "#0F172A" }}>{hit.returnedCars.count}</div>
-              </div>
-            </div>
-
-            {/* SMC Sold */}
-            <div style={{ ...S.card, borderTop: "3px solid #EC4899" }}>
-              <div style={{ fontSize: 11, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 }}>Same Month Sold P&L</div>
-              <div style={{ fontSize: 28, fontWeight: 900, color: "#EC4899", marginTop: 8 }}>{INR(hit.smcSoldCars.pnl)}</div>
-              <div style={{ marginTop: 12, padding: "10px 0", borderTop: "1px solid #F1F5F9" }}>
-                <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>SMC Sold Cars</div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: "#0F172A" }}>{hit.smcSoldCars.count}</div>
-              </div>
-            </div>
-
-            {/* Lead Fee Revenue */}
-            <div style={{ ...S.card, borderTop: "3px solid #10B981" }}>
-              <div style={{ fontSize: 11, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 }}>Lead Fee Revenue</div>
-              <div style={{ fontSize: 28, fontWeight: 900, color: "#10B981", marginTop: 8 }}>{INR(hit.leadFeeRevenue.amount)}</div>
-              <div style={{ fontSize: 11, color: "#065F46", background: "#DCFCE7", padding: "6px 10px", borderRadius: 6, marginTop: 12 }}>
-                Revenue offset — reduces net P&L hit
-              </div>
-            </div>
-
-            {/* 90+ Sold Reversal */}
-            <div style={{ ...S.card, borderTop: "3px solid #06B6D4" }}>
-              <div style={{ fontSize: 11, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 }}>90+ Day Sold Reversal</div>
-              <div style={{ fontSize: 28, fontWeight: 900, color: "#06B6D4", marginTop: 8 }}>{INR(hit.ninetyPlusSoldReversal.reversalAmt)}</div>
-              <div style={{ marginTop: 12, padding: "10px 0", borderTop: "1px solid #F1F5F9" }}>
-                <div style={{ fontSize: 10, color: "#64748B", fontWeight: 600 }}>Cars Reversed</div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: "#0F172A" }}>{hit.ninetyPlusSoldReversal.count}</div>
-              </div>
-            </div>
-          </div>
-
-          {/* P&L Waterfall summary */}
-          <div style={{ ...S.card, marginTop: 20 }}>
-            <div style={S.cHead}>📊 P&L Waterfall</div>
+      {/* ═══════ SMC ═══════ */}
+      {section==="smc"&&(
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
+          <div style={{ ...S.card, padding:0, overflow:"hidden" }}>
+            <div style={{ padding:"12px 20px", background:"#1E3A5F", color:"#FFF", fontWeight:800, fontSize:14 }}>SMC — STOCK_OUT</div>
             <table style={S.table}>
               <thead><tr>
-                {["Component", "Cars", "Amount", "Direction"].map((h) => <th key={h} style={S.th}>{h}</th>)}
+                <th style={tHeadL}>SI_BUCKET</th><th style={tHead}>Sold</th><th style={tHead}>Open ASP</th><th style={tHead}>Sold ASP</th><th style={tHead}>Loss</th><th style={tHead}>Loss%</th>
               </tr></thead>
               <tbody>
-                {[
-                  { label: "Sold Cars P&L", count: hit.soldCars.count, amt: hit.soldCars.pnl, dir: "loss" },
-                  { label: "Provision Amount", count: hit.provisionedCars.count, amt: hit.provisionedCars.provisionAmt, dir: "loss" },
-                  { label: "Returned Cars Provision", count: hit.returnedCars.count, amt: hit.returnedCars.provisionAmt, dir: "loss" },
-                  { label: "SMC Sold P&L", count: hit.smcSoldCars.count, amt: hit.smcSoldCars.pnl, dir: "loss" },
-                  { label: "Lead Fee Revenue", count: null, amt: hit.leadFeeRevenue.amount, dir: "gain" },
-                  { label: "90+ Sold Reversal", count: hit.ninetyPlusSoldReversal.count, amt: hit.ninetyPlusSoldReversal.reversalAmt, dir: "gain" },
-                ].map((row) => (
-                  <tr key={row.label} className="tr">
-                    <td style={{ ...S.td, fontWeight: 600 }}>{row.label}</td>
-                    <td style={S.td}>{row.count != null ? row.count : "—"}</td>
-                    <td style={{ ...S.td, fontWeight: 800, color: row.dir === "gain" ? "#10B981" : "#EF4444", fontVariantNumeric: "tabular-nums" }}>
-                      {row.dir === "gain" ? "+" : ""}{INR(row.amt)}
-                    </td>
-                    <td style={S.td}>
-                      <span style={{
-                        display: "inline-block", padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
-                        background: row.dir === "gain" ? "#DCFCE7" : "#FEE2E2",
-                        color: row.dir === "gain" ? "#166534" : "#991B1B",
-                      }}>{row.dir === "gain" ? "▲ Revenue/Reversal" : "▼ Loss"}</span>
-                    </td>
+                {(D.smc[p]?.sold||[]).map((r,i)=>(
+                  <tr key={r.bucket} style={{ background:i%2===0?"#FFF":"#F8FAFC" }}>
+                    <td style={tCellL}>{r.bucket}</td>
+                    <td style={tCell}>{r.sold}</td>
+                    <td style={tCell}>{r.openASP.toLocaleString("en-IN")}</td>
+                    <td style={tCell}>{r.soldASP.toLocaleString("en-IN")}</td>
+                    <td style={{ ...tCell, color:lossColor(r.loss), fontWeight:700 }}>{INR(r.loss)}</td>
+                    <td style={{ ...tCell, color:lossColor(r.lossPct), fontWeight:700 }}>{r.lossPct.toFixed(1)}%</td>
                   </tr>
                 ))}
-                <tr style={{ background: "#F8FAFC" }}>
-                  <td style={{ ...S.td, fontWeight: 900, fontSize: 15 }}>NET P&L HIT</td>
-                  <td style={S.td}>—</td>
-                  <td style={{ ...S.td, fontWeight: 900, fontSize: 18, color: totalPnLHit >= 0 ? "#10B981" : "#EF4444" }}>{INR(totalPnLHit)}</td>
-                  <td style={S.td}></td>
+              </tbody>
+            </table>
+          </div>
+          <div style={{ ...S.card, padding:0, overflow:"hidden" }}>
+            <div style={{ padding:"12px 20px", background:"#6B21A8", color:"#FFF", fontWeight:800, fontSize:14 }}>SMC — SBND</div>
+            <table style={S.table}>
+              <thead><tr>
+                <th style={{ ...tHeadL,background:"#6B21A8" }}>SI_BUCKET</th><th style={{ ...tHead,background:"#6B21A8" }}>Count</th><th style={{ ...tHead,background:"#6B21A8" }}>SBND ASP</th><th style={{ ...tHead,background:"#6B21A8" }}>Loss</th><th style={{ ...tHead,background:"#6B21A8" }}>Loss%</th>
+              </tr></thead>
+              <tbody>
+                {(D.smc[p]?.sbnd||[]).map((r,i)=>(
+                  <tr key={r.bucket} style={{ background:i%2===0?"#FFF":"#FAF5FF" }}>
+                    <td style={tCellL}>{r.bucket}</td>
+                    <td style={tCell}>{r.count}</td>
+                    <td style={tCell}>{r.sbndASP.toLocaleString("en-IN")}</td>
+                    <td style={{ ...tCell, color:lossColor(r.loss), fontWeight:700 }}>{r.loss.toLocaleString("en-IN")}</td>
+                    <td style={{ ...tCell, color:lossColor(r.lossPct), fontWeight:700 }}>{r.lossPct.toFixed(1)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════ P&L HIT — Finance-savvy view ═══════ */}
+      {section==="pnlhit"&&(
+        <div>
+          {/* Big P&L summary strip */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:0, marginBottom:24, borderRadius:12, overflow:"hidden", border:"1px solid #E2E8F0" }}>
+            <div style={{ padding:"20px 24px", background:"#0F172A", textAlign:"center" }}>
+              <div style={{ fontSize:10, color:"#94A3B8", textTransform:"uppercase", letterSpacing:"2px", fontWeight:700 }}>Gross P&L</div>
+              <div style={{ fontSize:28, fontWeight:900, color:"#EF4444", marginTop:6 }}>{INR(grossPnL)}</div>
+              <div style={{ fontSize:11, color:"#64748B", marginTop:4 }}>{hit.soldCars.count} cars · {INR(hit.soldCars.avgLoss)}/car</div>
+            </div>
+            <div style={{ padding:"20px 24px", background:"#1E293B", textAlign:"center" }}>
+              <div style={{ fontSize:10, color:"#94A3B8", textTransform:"uppercase", letterSpacing:"2px", fontWeight:700 }}>Adjustments</div>
+              <div style={{ fontSize:28, fontWeight:900, color:"#F59E0B", marginTop:6 }}>{INR((hit.leadFeeRevenue?.amount||0)+(hit.ninetyPlusSoldReversal?.reversalAmt||0)+(hit.provisionedCars?.provisionAmt||0)+(hit.returnedCars?.provisionAmt||0)+(hit.smcSoldCars?.pnl||0))}</div>
+              <div style={{ fontSize:11, color:"#64748B", marginTop:4 }}>Provision + Returns + SMC + Revenue</div>
+            </div>
+            <div style={{ padding:"20px 24px", background:"#1E293B", textAlign:"center" }}>
+              <div style={{ fontSize:10, color:"#94A3B8", textTransform:"uppercase", letterSpacing:"2px", fontWeight:700 }}>Opex Costs</div>
+              <div style={{ fontSize:28, fontWeight:900, color:"#F97316", marginTop:6 }}>{INR(-totalCosts)}</div>
+              <div style={{ fontSize:11, color:"#64748B", marginTop:4 }}>Depreciation + Parking + Transport</div>
+            </div>
+            <div style={{ padding:"20px 24px", background: finalPnL>=0?"#064E3B":"#7F1D1D", textAlign:"center" }}>
+              <div style={{ fontSize:10, color:"#FFF", textTransform:"uppercase", letterSpacing:"2px", fontWeight:700, opacity:0.8 }}>Net P&L Impact</div>
+              <div style={{ fontSize:32, fontWeight:900, color:"#FFF", marginTop:6 }}>{INR(finalPnL)}</div>
+              <div style={{ fontSize:11, color:"#FFF", marginTop:4, opacity:0.7 }}>{p} · {new Date().toLocaleDateString("en-IN",{month:"long",year:"numeric"})}</div>
+            </div>
+          </div>
+
+          {/* Waterfall table */}
+          <div style={{ ...S.card, padding:0, overflow:"hidden", marginBottom:20 }}>
+            <div style={{ padding:"14px 20px", background:"#0F172A", color:"#FFF", fontWeight:800, fontSize:14 }}>P&L WATERFALL</div>
+            <table style={{ ...S.table, fontSize:13 }}>
+              <thead><tr>
+                <th style={{ ...tHeadL, background:"#0F172A" }}>Component</th>
+                <th style={{ ...tHead, background:"#0F172A" }}>Cars</th>
+                <th style={{ ...tHead, background:"#0F172A" }}>Amount</th>
+                <th style={{ ...tHead, background:"#0F172A" }}>Per Car</th>
+                <th style={{ ...tHead, background:"#0F172A" }}>Type</th>
+                <th style={{ ...tHead, background:"#0F172A" }}>Running Total</th>
+              </tr></thead>
+              <tbody>
+                {(() => {
+                  let running = 0;
+                  const rows = [
+                    { label:"Sold Cars P&L", count:hit.soldCars.count, amt:hit.soldCars.pnl, type:"loss" },
+                    { label:"Provision (Unsold)", count:hit.provisionedCars.count, amt:hit.provisionedCars.provisionAmt, type:"loss" },
+                    { label:"Returned Cars Provision", count:hit.returnedCars.count, amt:hit.returnedCars.provisionAmt, type:"loss" },
+                    { label:"SMC Sold P&L", count:hit.smcSoldCars.count, amt:hit.smcSoldCars.pnl, type:"loss" },
+                    { label:"Lead Fee Revenue", count:hit.leadFeeRevenue.cars, amt:hit.leadFeeRevenue.amount, type:"gain" },
+                    { label:"90+ Sold Reversal", count:hit.ninetyPlusSoldReversal.count, amt:hit.ninetyPlusSoldReversal.reversalAmt, type:"gain" },
+                    { label:"Depreciation Cost", count:null, amt:-(hit.depreciationCost||0), type:"cost" },
+                    { label:"Parking Cost", count:null, amt:-(hit.parkingCost||0), type:"cost" },
+                    { label:"Transport Cost", count:null, amt:-(hit.transportCost||0), type:"cost" },
+                  ];
+                  return rows.map((r,i) => {
+                    running += r.amt;
+                    const typeColors = { loss:"#FEE2E2", gain:"#DCFCE7", cost:"#FEF3C7" };
+                    const typeText = { loss:"▼ Loss", gain:"▲ Revenue", cost:"◆ Cost" };
+                    const typeTextColor = { loss:"#991B1B", gain:"#166534", cost:"#92400E" };
+                    return (
+                      <tr key={r.label} style={{ background:i%2===0?"#FFF":"#F8FAFC" }}>
+                        <td style={{ ...tCellL, fontSize:13 }}>{r.label}</td>
+                        <td style={tCell}>{r.count!=null?r.count:"—"}</td>
+                        <td style={{ ...tCell, fontWeight:800, color: r.amt>=0?"#10B981":"#EF4444" }}>{r.amt>=0?"+":""}{INR(r.amt)}</td>
+                        <td style={tCell}>{r.count?INR(Math.round(r.amt/r.count)):"—"}</td>
+                        <td style={tCell}>
+                          <span style={{ padding:"3px 10px", borderRadius:20, fontSize:10, fontWeight:700, background:typeColors[r.type], color:typeTextColor[r.type] }}>{typeText[r.type]}</span>
+                        </td>
+                        <td style={{ ...tCell, fontWeight:800, color:running>=0?"#10B981":"#EF4444" }}>{INR(running)}</td>
+                      </tr>
+                    );
+                  });
+                })()}
+                <tr style={{ background:"#0F172A" }}>
+                  <td style={{ ...tTotalCellL, background:"#0F172A", color:"#FFF", fontSize:15 }}>NET P&L</td>
+                  <td style={{ ...tTotalCell, background:"#0F172A", color:"#FFF" }}>—</td>
+                  <td style={{ ...tTotalCell, background:"#0F172A", color: finalPnL>=0?"#10B981":"#EF4444", fontSize:18 }}>{INR(finalPnL)}</td>
+                  <td style={{ ...tTotalCell, background:"#0F172A", color:"#FFF" }}>{hit.soldCars.count?INR(Math.round(finalPnL/hit.soldCars.count)):"—"}</td>
+                  <td style={{ ...tTotalCell, background:"#0F172A" }}></td>
+                  <td style={{ ...tTotalCell, background:"#0F172A", color: finalPnL>=0?"#10B981":"#EF4444", fontSize:18 }}>{INR(finalPnL)}</td>
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          {/* Margin analysis cards */}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
+            <div style={{ ...S.card, padding:16, borderTop:"3px solid #3B82F6" }}>
+              <div style={{ fontSize:10, color:"#64748B", textTransform:"uppercase", fontWeight:700 }}>Loss / Car (Gross)</div>
+              <div style={{ fontSize:24, fontWeight:900, color:"#EF4444", marginTop:6 }}>{INR(hit.soldCars.avgLoss)}</div>
+            </div>
+            <div style={{ ...S.card, padding:16, borderTop:"3px solid #10B981" }}>
+              <div style={{ fontSize:10, color:"#64748B", textTransform:"uppercase", fontWeight:700 }}>Lead Fee / Car</div>
+              <div style={{ fontSize:24, fontWeight:900, color:"#10B981", marginTop:6 }}>{INR(hit.leadFeeRevenue.cars?Math.round(hit.leadFeeRevenue.amount/hit.leadFeeRevenue.cars):0)}</div>
+            </div>
+            <div style={{ ...S.card, padding:16, borderTop:"3px solid #F59E0B" }}>
+              <div style={{ fontSize:10, color:"#64748B", textTransform:"uppercase", fontWeight:700 }}>Provision / Unsold Car</div>
+              <div style={{ fontSize:24, fontWeight:900, color:"#F59E0B", marginTop:6 }}>{INR(hit.provisionedCars.count?Math.round(hit.provisionedCars.provisionAmt/hit.provisionedCars.count):0)}</div>
+            </div>
+            <div style={{ ...S.card, padding:16, borderTop:"3px solid #8B5CF6" }}>
+              <div style={{ fontSize:10, color:"#64748B", textTransform:"uppercase", fontWeight:700 }}>Net P&L / Car</div>
+              <div style={{ fontSize:24, fontWeight:900, color: finalPnL>=0?"#10B981":"#EF4444", marginTop:6 }}>{INR(hit.soldCars.count?Math.round(finalPnL/hit.soldCars.count):0)}</div>
+            </div>
           </div>
         </div>
       )}
     </div>
   );
 }
-
 
 // ═════════════════════════════════════════════════════════════════════
 //  TAB 5 — AUCTION CONSOLE
@@ -2099,254 +1759,240 @@ function OCBConsole({ rows, slackUrl, sheetUrl, managerEmail, currentUser }) {
 
 
 // ═════════════════════════════════════════════════════════════════════
-//  TAB 7 — BUSINESS SNAPSHOT
-//  All key inventory-sales metrics: verifications, SOs, cancellations,
-//  re-cancellations, SBND, GFD, dealer activity, lead fees — MTD vs LMTD
+//  TAB 7 — BUSINESS SNAPSHOT (v2)
 // ═════════════════════════════════════════════════════════════════════
 const BIZ_SNAP_DATA = {
   MTD: {
-    verificationTarget: 1200,
-    soTarget: 950,
-    verifications: { total: 842, byBucket: [{ b: "0-30", v: 380 }, { b: "30-60", v: 210 }, { b: "60-90", v: 142 }, { b: "90-120", v: 65 }, { b: "120-150", v: 28 }, { b: "150-180", v: 12 }, { b: "180+", v: 5 }] },
-    liveCancellations: 124,
-    reCancellations: { total: 68, byBucket: [{ b: "0-30", v: 22 }, { b: "30-60", v: 18 }, { b: "60-90", v: 14 }, { b: "90-120", v: 8 }, { b: "120+", v: 6 }] },
-    stockOuts: { total: 718, byBucket: [{ b: "0-30", v: 320 }, { b: "30-60", v: 178 }, { b: "60-90", v: 118 }, { b: "90-120", v: 58 }, { b: "120-150", v: 28 }, { b: "150-180", v: 10 }, { b: "180+", v: 6 }] },
+    verificationTarget:1200, soTarget:950,
+    verifications: { total:842, byBucket:[{b:"0-30",v:380},{b:"30-60",v:210},{b:"60-90",v:142},{b:"90-120",v:65},{b:"120-150",v:28},{b:"150-180",v:12},{b:"180+",v:5}] },
+    liveCancellations:124,
+    reCancellations: { total:68, byBucket:[{b:"0-30",v:22},{b:"30-60",v:18},{b:"60-90",v:14},{b:"90-120",v:8},{b:"120+",v:6}] },
+    stockOuts: { total:718, byBucket:[{b:"0-30",v:320},{b:"30-60",v:178},{b:"60-90",v:118},{b:"90-120",v:58},{b:"120-150",v:28},{b:"150-180",v:10},{b:"180+",v:6}] },
     sbnd: {
-      total: 129,
-      byBucket: [{ b: "0-30", v: 45 }, { b: "30-60", v: 32 }, { b: "60-90", v: 22 }, { b: "90-120", v: 14 }, { b: "120-150", v: 8 }, { b: "150-180", v: 5 }, { b: "180+", v: 3 }],
-      byAgeing: [{ a: "0-3 days", v: 52 }, { a: "3-7 days", v: 38 }, { a: "7-10 days", v: 22 }, { a: "10+ days", v: 17 }],
+      total:129,
+      byBucket:[{b:"0-30",v:45},{b:"30-60",v:32},{b:"60-90",v:22},{b:"90-120",v:14},{b:"120-150",v:8},{b:"150-180",v:5},{b:"180+",v:3}],
+      byAgeing:[{a:"0-3d",v:52},{a:"3-7d",v:38},{a:"7-10d",v:22},{a:"10+d",v:17}],
     },
-    gfd: { total: 48, byBucket: [{ b: "0-30", v: 18 }, { b: "30-60", v: 12 }, { b: "60-90", v: 8 }, { b: "90-120", v: 5 }, { b: "120+", v: 5 }] },
+    gfd: { total:48, byBucket:[{b:"0-30",v:18},{b:"30-60",v:12},{b:"60-90",v:8},{b:"90-120",v:5},{b:"120+",v:5}] },
     dealerActivity: {
-      dayAuction: { auctionedCars: 1840, totalAuctions: 8520, auctionPerCar: 4.6, impressions: 42500, views: 18200, bids: 6340, liveImprAuc: 23.1 },
-      ocb: { auctionedCars: 420, totalAuctions: 420, auctionPerCar: 1.0, impressions: 8800, views: 3200, bids: 1450, liveImprAuc: 20.9 },
-      touchBuy: { auctionedCars: 280, totalAuctions: 280, auctionPerCar: 1.0, impressions: 5600, views: 2100, bids: 820, liveImprAuc: 20.0 },
+      dayAuction: { cars:1840, auctions:8520, aucPerCar:4.6, impressions:42500, views:18200, bids:6340, avgImpr:23.1, avgViews:9.9, avgBids:3.4, i2v:42.8, v2b:34.8, i2b:14.9 },
+      ocb:        { cars:420,  auctions:420,  aucPerCar:1.0, impressions:8800,  views:3200,  bids:1450, avgImpr:20.9, avgViews:7.6, avgBids:3.5, i2v:36.4, v2b:45.3, i2b:16.5 },
+      touchBuy:   { cars:280,  auctions:280,  aucPerCar:1.0, impressions:5600,  views:2100,  bids:820,  avgImpr:20.0, avgViews:7.5, avgBids:2.9, i2v:37.5, v2b:39.0, i2b:14.6 },
     },
-    leadFeeEarned: 12_50_000,
-    leadFeeRefunds: 1_80_000,
-    sbndOver10Days: 17,
+    leadFeeEarned:12_50_000, leadFeeRefunds:1_80_000, sbndOver10Days:17,
+    leadFeeDetail: [
+      { appId:"APP-10245", bp:285000, leadFee:3200, bucket:"0-30" },
+      { appId:"APP-10312", bp:420000, leadFee:4800, bucket:"30-60" },
+      { appId:"APP-10398", bp:195000, leadFee:2200, bucket:"0-30" },
+      { appId:"APP-10455", bp:310000, leadFee:3500, bucket:"60-90" },
+      { appId:"APP-10512", bp:148000, leadFee:1800, bucket:"90-120" },
+      { appId:"APP-10589", bp:520000, leadFee:5500, bucket:"0-30" },
+      { appId:"APP-10621", bp:275000, leadFee:3100, bucket:"30-60" },
+      { appId:"APP-10678", bp:345000, leadFee:3800, bucket:"60-90" },
+    ],
   },
   LMTD: {
-    verificationTarget: 1200,
-    soTarget: 950,
-    verifications: { total: 910, byBucket: [{ b: "0-30", v: 415 }, { b: "30-60", v: 228 }, { b: "60-90", v: 152 }, { b: "90-120", v: 68 }, { b: "120-150", v: 30 }, { b: "150-180", v: 12 }, { b: "180+", v: 5 }] },
-    liveCancellations: 108,
-    reCancellations: { total: 58, byBucket: [{ b: "0-30", v: 18 }, { b: "30-60", v: 16 }, { b: "60-90", v: 12 }, { b: "90-120", v: 7 }, { b: "120+", v: 5 }] },
-    stockOuts: { total: 782, byBucket: [{ b: "0-30", v: 350 }, { b: "30-60", v: 195 }, { b: "60-90", v: 128 }, { b: "90-120", v: 62 }, { b: "120-150", v: 30 }, { b: "150-180", v: 11 }, { b: "180+", v: 6 }] },
+    verificationTarget:1200, soTarget:950,
+    verifications: { total:910, byBucket:[{b:"0-30",v:415},{b:"30-60",v:228},{b:"60-90",v:152},{b:"90-120",v:68},{b:"120-150",v:30},{b:"150-180",v:12},{b:"180+",v:5}] },
+    liveCancellations:108,
+    reCancellations: { total:58, byBucket:[{b:"0-30",v:18},{b:"30-60",v:16},{b:"60-90",v:12},{b:"90-120",v:7},{b:"120+",v:5}] },
+    stockOuts: { total:782, byBucket:[{b:"0-30",v:350},{b:"30-60",v:195},{b:"60-90",v:128},{b:"90-120",v:62},{b:"120-150",v:30},{b:"150-180",v:11},{b:"180+",v:6}] },
     sbnd: {
-      total: 118,
-      byBucket: [{ b: "0-30", v: 42 }, { b: "30-60", v: 28 }, { b: "60-90", v: 20 }, { b: "90-120", v: 12 }, { b: "120-150", v: 8 }, { b: "150-180", v: 5 }, { b: "180+", v: 3 }],
-      byAgeing: [{ a: "0-3 days", v: 48 }, { a: "3-7 days", v: 35 }, { a: "7-10 days", v: 20 }, { a: "10+ days", v: 15 }],
+      total:118,
+      byBucket:[{b:"0-30",v:42},{b:"30-60",v:28},{b:"60-90",v:20},{b:"90-120",v:12},{b:"120-150",v:8},{b:"150-180",v:5},{b:"180+",v:3}],
+      byAgeing:[{a:"0-3d",v:48},{a:"3-7d",v:35},{a:"7-10d",v:20},{a:"10+d",v:15}],
     },
-    gfd: { total: 42, byBucket: [{ b: "0-30", v: 16 }, { b: "30-60", v: 10 }, { b: "60-90", v: 7 }, { b: "90-120", v: 5 }, { b: "120+", v: 4 }] },
+    gfd: { total:42, byBucket:[{b:"0-30",v:16},{b:"30-60",v:10},{b:"60-90",v:7},{b:"90-120",v:5},{b:"120+",v:4}] },
     dealerActivity: {
-      dayAuction: { auctionedCars: 1960, totalAuctions: 9100, auctionPerCar: 4.6, impressions: 45200, views: 19500, bids: 6800, liveImprAuc: 23.1 },
-      ocb: { auctionedCars: 450, totalAuctions: 450, auctionPerCar: 1.0, impressions: 9400, views: 3500, bids: 1580, liveImprAuc: 20.9 },
-      touchBuy: { auctionedCars: 310, totalAuctions: 310, auctionPerCar: 1.0, impressions: 6200, views: 2350, bids: 910, liveImprAuc: 20.0 },
+      dayAuction: { cars:1960, auctions:9100, aucPerCar:4.6, impressions:45200, views:19500, bids:6800, avgImpr:23.1, avgViews:10.0, avgBids:3.5, i2v:43.1, v2b:34.9, i2b:15.0 },
+      ocb:        { cars:450,  auctions:450,  aucPerCar:1.0, impressions:9400,  views:3500,  bids:1580, avgImpr:20.9, avgViews:7.8, avgBids:3.5, i2v:37.2, v2b:45.1, i2b:16.8 },
+      touchBuy:   { cars:310,  auctions:310,  aucPerCar:1.0, impressions:6200,  views:2350,  bids:910,  avgImpr:20.0, avgViews:7.6, avgBids:2.9, i2v:37.9, v2b:38.7, i2b:14.7 },
     },
-    leadFeeEarned: 14_00_000,
-    leadFeeRefunds: 1_60_000,
-    sbndOver10Days: 15,
+    leadFeeEarned:14_00_000, leadFeeRefunds:1_60_000, sbndOver10Days:15,
+    leadFeeDetail: [
+      { appId:"APP-09845", bp:295000, leadFee:3400, bucket:"0-30" },
+      { appId:"APP-09912", bp:410000, leadFee:4600, bucket:"30-60" },
+      { appId:"APP-09998", bp:205000, leadFee:2400, bucket:"0-30" },
+      { appId:"APP-10055", bp:325000, leadFee:3600, bucket:"60-90" },
+      { appId:"APP-10112", bp:155000, leadFee:1900, bucket:"90-120" },
+    ],
   },
 };
 
 function BusinessSnapshotTab() {
   const [period, setPeriod] = useState("MTD");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [invFilter, setInvFilter] = useState("All"); // All | Opening Inv | SMC
+  const [channelF, setChannelF] = useState("All");
+  const [zoneF, setZoneF] = useState("All");
   const [activityFilter, setActivityFilter] = useState("dayAuction");
-  const mtd = BIZ_SNAP_DATA.MTD;
-  const lmtd = BIZ_SNAP_DATA.LMTD;
-  const d = period === "LMTD" ? lmtd : mtd;
-  const other = period === "LMTD" ? mtd : lmtd;
+  const [actDateFrom, setActDateFrom] = useState("");
+  const [actDateTo, setActDateTo] = useState("");
+
+  const d = BIZ_SNAP_DATA[period === "LMTD" ? "LMTD" : "MTD"];
+  const other = BIZ_SNAP_DATA[period === "LMTD" ? "MTD" : "LMTD"];
   const otherLabel = period === "LMTD" ? "MTD" : "LMTD";
+  const act = d.dealerActivity[activityFilter];
 
-  const delta = (curr, prev) => {
-    if (!prev) return null;
-    const diff = curr - prev;
-    const pct = prev ? ((diff / prev) * 100).toFixed(1) : 0;
-    return { diff, pct, up: diff >= 0 };
-  };
-
-  const MetricCard = ({ label, value, fmt, prev, color, sub }) => {
-    const v = fmt === "inr" ? INR(value) : (typeof value === "number" ? value.toLocaleString() : value);
-    const dl = prev != null ? delta(value, prev) : null;
-    return (
-      <div style={{ ...S.card, padding: "16px 18px" }}>
-        <div style={{ fontSize: 10, color: "#64748B", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 }}>{label}</div>
-        <div style={{ fontSize: 24, fontWeight: 900, color: color || "#0F172A", marginTop: 6, letterSpacing: "-0.5px" }}>{v}</div>
-        {dl && (
-          <div style={{ fontSize: 11, marginTop: 4, color: dl.up ? "#10B981" : "#EF4444", fontWeight: 600 }}>
-            {dl.up ? "▲" : "▼"} {Math.abs(dl.diff).toLocaleString()} ({dl.up ? "+" : ""}{dl.pct}%) vs {otherLabel}
-          </div>
-        )}
-        {sub && <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>{sub}</div>}
-      </div>
-    );
-  };
-
-  const BucketBar = ({ data, total, color }) => (
-    <div style={{ display: "flex", gap: 4, marginTop: 8 }}>
-      {data.map((r) => {
-        const pct = total ? (r.v / total) * 100 : 0;
-        return (
-          <div key={r.b} style={{ flex: Math.max(pct, 3), background: color || "#3B82F6", borderRadius: 4, padding: "6px 4px", textAlign: "center", fontSize: 9, color: "#fff", fontWeight: 700, minWidth: 30, opacity: 0.7 + pct / 200 }}>
-            <div>{r.b}</div>
-            <div style={{ fontSize: 12 }}>{r.v}</div>
-          </div>
-        );
-      })}
-    </div>
-  );
+  const delta = (curr, prev) => { const diff=curr-prev; const pct=prev?((diff/prev)*100).toFixed(1):0; return {diff,pct,up:diff>=0}; };
 
   const BucketTable = ({ data, label }) => (
-    <table style={{ ...S.table, fontSize: 12, marginTop: 8 }}>
+    <table style={{ ...S.table, fontSize:12, marginTop:8 }}>
       <thead><tr><th style={S.th}>Bucket</th><th style={S.th}>{label}</th><th style={S.th}>%</th></tr></thead>
-      <tbody>
-        {data.map((r) => (
-          <tr key={r.b || r.a} className="tr">
-            <td style={S.td}><span style={S.bucketChip}>{r.b || r.a}</span></td>
-            <td style={{ ...S.td, fontWeight: 700 }}>{r.v.toLocaleString()}</td>
-            <td style={{ ...S.td, color: "#64748B" }}>{data.reduce((s, x) => s + x.v, 0) ? ((r.v / data.reduce((s, x) => s + x.v, 0)) * 100).toFixed(1) : 0}%</td>
-          </tr>
-        ))}
-      </tbody>
+      <tbody>{data.map(r => {
+        const total = data.reduce((s,x)=>s+x.v,0);
+        return (<tr key={r.b||r.a} className="tr"><td style={S.td}><span style={S.bucketChip}>{r.b||r.a}</span></td><td style={{...S.td,fontWeight:700}}>{r.v.toLocaleString()}</td><td style={{...S.td,color:"#64748B"}}>{total?((r.v/total)*100).toFixed(1):0}%</td></tr>);
+      })}</tbody>
     </table>
   );
 
-  const act = d.dealerActivity[activityFilter];
-
   return (
     <div>
-      {/* Period toggle */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 20, alignItems: "center" }}>
-        {["MTD", "LMTD"].map((pr) => (
-          <button key={pr} onClick={() => setPeriod(pr)} style={{
-            padding: "10px 24px", borderRadius: 8, border: period === pr ? "2px solid #3B82F6" : "2px solid #E2E8F0",
-            background: period === pr ? "#EFF6FF" : "#FFF", color: period === pr ? "#1D4ED8" : "#64748B",
-            fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit",
+      {/* Period + Filters */}
+      <div style={{ ...S.card, marginBottom:16, display:"flex", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+        {["MTD","LMTD","Custom"].map(pr=>(
+          <button key={pr} onClick={()=>setPeriod(pr==="Custom"?"custom":pr)} style={{
+            padding:"9px 18px", borderRadius:8, border:period===(pr==="Custom"?"custom":pr)?"2px solid #1E3A5F":"2px solid #E2E8F0",
+            background:period===(pr==="Custom"?"custom":pr)?"#EFF6FF":"#FFF", color:period===(pr==="Custom"?"custom":pr)?"#1E3A5F":"#64748B",
+            fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit",
           }}>{pr}</button>
         ))}
-        <div style={{ marginLeft: "auto", padding: "8px 16px", background: "#FEF3C7", borderRadius: 8, fontSize: 12, color: "#78350F", fontWeight: 600 }}>
-          ⚠️ Dummy data — wire to live queries later
-        </div>
+        {period==="custom"&&(<>
+          <input type="date" style={S.sel} value={dateFrom} onChange={e=>setDateFrom(e.target.value)} />
+          <span style={{color:"#64748B"}}>to</span>
+          <input type="date" style={S.sel} value={dateTo} onChange={e=>setDateTo(e.target.value)} />
+        </>)}
+        <div style={{width:1,height:28,background:"#E2E8F0"}} />
+        <select style={S.sel} value={invFilter} onChange={e=>setInvFilter(e.target.value)}>
+          <option value="All">📦 All Inventory</option><option value="Opening">Opening Inv</option><option value="SMC">Same Month Cancelled</option>
+        </select>
+        <select style={S.sel} value={channelF} onChange={e=>setChannelF(e.target.value)}>
+          <option value="All">📡 All Channels</option><option value="C2D">C2D</option><option value="C2B">C2B</option>
+        </select>
+        <select style={S.sel} value={zoneF} onChange={e=>setZoneF(e.target.value)}>
+          <option value="All">🌐 All Zones</option><option value="North">North</option><option value="South">South</option>
+        </select>
+        <div style={{ marginLeft:"auto", padding:"6px 14px", background:"#FEF3C7", borderRadius:8, fontSize:11, color:"#78350F", fontWeight:600 }}>⚠️ Dummy data</div>
       </div>
 
-      {/* ── Targets & headline KPIs ─────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
-        <div style={{ ...S.card, padding: "16px 18px", background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
-          <div style={{ fontSize: 10, color: "#166534", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 }}>Verification Target</div>
-          <div style={{ fontSize: 28, fontWeight: 900, color: "#166534", marginTop: 4 }}>{d.verificationTarget.toLocaleString()}</div>
-          <div style={{ fontSize: 12, color: "#15803D", marginTop: 4 }}>Achieved: {d.verifications.total.toLocaleString()} ({((d.verifications.total / d.verificationTarget) * 100).toFixed(0)}%)</div>
-          <div style={{ height: 6, background: "#DCFCE7", borderRadius: 3, marginTop: 8, overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${Math.min(100, (d.verifications.total / d.verificationTarget) * 100)}%`, background: "#22C55E", borderRadius: 3 }} />
+      {/* Targets */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:20 }}>
+        <div style={{ ...S.card, padding:"16px 18px", background:"#F0FDF4", border:"1px solid #BBF7D0" }}>
+          <div style={{ fontSize:10, color:"#166534", textTransform:"uppercase", letterSpacing:"1px", fontWeight:700 }}>Verification Target</div>
+          <div style={{ fontSize:28, fontWeight:900, color:"#166534", marginTop:4 }}>{d.verificationTarget.toLocaleString()}</div>
+          <div style={{ fontSize:12, color:"#15803D", marginTop:4 }}>Done: {d.verifications.total} ({((d.verifications.total/d.verificationTarget)*100).toFixed(0)}%)</div>
+          <div style={{ height:6, background:"#DCFCE7", borderRadius:3, marginTop:8, overflow:"hidden" }}><div style={{ height:"100%", width:`${Math.min(100,(d.verifications.total/d.verificationTarget)*100)}%`, background:"#22C55E", borderRadius:3 }} /></div>
+        </div>
+        <div style={{ ...S.card, padding:"16px 18px", background:"#EFF6FF", border:"1px solid #BFDBFE" }}>
+          <div style={{ fontSize:10, color:"#1E40AF", textTransform:"uppercase", letterSpacing:"1px", fontWeight:700 }}>SO Target</div>
+          <div style={{ fontSize:28, fontWeight:900, color:"#1E40AF", marginTop:4 }}>{d.soTarget.toLocaleString()}</div>
+          <div style={{ fontSize:12, color:"#1D4ED8", marginTop:4 }}>Done: {d.stockOuts.total} ({((d.stockOuts.total/d.soTarget)*100).toFixed(0)}%)</div>
+          <div style={{ height:6, background:"#DBEAFE", borderRadius:3, marginTop:8, overflow:"hidden" }}><div style={{ height:"100%", width:`${Math.min(100,(d.stockOuts.total/d.soTarget)*100)}%`, background:"#3B82F6", borderRadius:3 }} /></div>
+        </div>
+        <div style={{ ...S.card, padding:"16px 18px" }}><div style={{ fontSize:10, color:"#64748B", textTransform:"uppercase", fontWeight:700 }}>Live Cancellations</div><div style={{ fontSize:28, fontWeight:900, color:"#EF4444", marginTop:6 }}>{d.liveCancellations}</div>
+          {(()=>{const dl=delta(d.liveCancellations,other.liveCancellations); return <div style={{fontSize:11,marginTop:4,color:dl.up?"#EF4444":"#10B981",fontWeight:600}}>{dl.up?"▲":"▼"} {Math.abs(dl.diff)} vs {otherLabel}</div>;})()}
+        </div>
+        <div style={{ ...S.card, padding:"16px 18px" }}><div style={{ fontSize:10, color:"#64748B", textTransform:"uppercase", fontWeight:700 }}>SBND &gt; 10 Days</div><div style={{ fontSize:28, fontWeight:900, color:"#F59E0B", marginTop:6 }}>{d.sbndOver10Days}</div><div style={{ fontSize:11, color:"#94A3B8", marginTop:4 }}>Needs follow-up</div></div>
+      </div>
+
+      {/* Core metrics */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16, marginBottom:20 }}>
+        <div style={S.card}><div style={S.cHead}>✅ Verifications ({d.verifications.total})</div><BucketTable data={d.verifications.byBucket} label="Verified" /></div>
+        <div style={S.card}><div style={S.cHead}>📦 Stock Outs ({d.stockOuts.total})</div><BucketTable data={d.stockOuts.byBucket} label="SOs" /></div>
+        <div style={S.card}><div style={S.cHead}>🔄 Re-Cancellations ({d.reCancellations.total})</div><BucketTable data={d.reCancellations.byBucket} label="Re-Cancel" /></div>
+      </div>
+
+      {/* SBND + GFD */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:16, marginBottom:20 }}>
+        <div style={S.card}><div style={S.cHead}>🚛 SBND by Bucket ({d.sbnd.total})</div><BucketTable data={d.sbnd.byBucket} label="SBND" /></div>
+        <div style={S.card}><div style={S.cHead}>🚛 SBND by Ageing</div><BucketTable data={d.sbnd.byAgeing.map(r=>({b:r.a,v:r.v}))} label="Cars" /></div>
+        <div style={S.card}><div style={S.cHead}>✅ GFD — Go For Delivery ({d.gfd.total})</div><BucketTable data={d.gfd.byBucket} label="GFD" /></div>
+      </div>
+
+      {/* Dealer Activity */}
+      <div style={{ ...S.card, marginBottom:20 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16, flexWrap:"wrap", gap:8 }}>
+          <div style={S.cHead}>🏪 Dealer Activity on Inventory Cars</div>
+          <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+            {[{id:"dayAuction",l:"Day Auctions"},{id:"ocb",l:"OCB"},{id:"touchBuy",l:"Touch & Buy"}].map(f=>(
+              <button key={f.id} onClick={()=>setActivityFilter(f.id)} style={{ padding:"7px 14px", borderRadius:8, border:activityFilter===f.id?"2px solid #1E3A5F":"1px solid #E2E8F0", background:activityFilter===f.id?"#EFF6FF":"#FFF", color:activityFilter===f.id?"#1E3A5F":"#64748B", fontWeight:700, fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>{f.l}</button>
+            ))}
+            <div style={{width:1,height:24,background:"#E2E8F0"}} />
+            <input type="date" style={{...S.sel,fontSize:11,padding:"6px 8px"}} value={actDateFrom} onChange={e=>setActDateFrom(e.target.value)} />
+            <span style={{color:"#94A3B8",fontSize:11}}>to</span>
+            <input type="date" style={{...S.sel,fontSize:11,padding:"6px 8px"}} value={actDateTo} onChange={e=>setActDateTo(e.target.value)} />
           </div>
         </div>
-        <div style={{ ...S.card, padding: "16px 18px", background: "#EFF6FF", border: "1px solid #BFDBFE" }}>
-          <div style={{ fontSize: 10, color: "#1E40AF", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 700 }}>SO Target</div>
-          <div style={{ fontSize: 28, fontWeight: 900, color: "#1E40AF", marginTop: 4 }}>{d.soTarget.toLocaleString()}</div>
-          <div style={{ fontSize: 12, color: "#1D4ED8", marginTop: 4 }}>Achieved: {d.stockOuts.total.toLocaleString()} ({((d.stockOuts.total / d.soTarget) * 100).toFixed(0)}%)</div>
-          <div style={{ height: 6, background: "#DBEAFE", borderRadius: 3, marginTop: 8, overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${Math.min(100, (d.stockOuts.total / d.soTarget) * 100)}%`, background: "#3B82F6", borderRadius: 3 }} />
-          </div>
-        </div>
-        <MetricCard label="Live Cancellations" value={d.liveCancellations} prev={other.liveCancellations} color="#EF4444" />
-        <MetricCard label="SBND > 10 Days" value={d.sbndOver10Days} prev={other.sbndOver10Days} color="#F59E0B" sub="Needs follow-up" />
-      </div>
-
-      {/* ── Core metrics grid ───────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 20 }}>
-        {/* Verifications */}
-        <div style={S.card}>
-          <div style={S.cHead}>✅ Verifications</div>
-          <div style={{ fontSize: 28, fontWeight: 900, color: "#10B981" }}>{d.verifications.total.toLocaleString()}</div>
-          <BucketBar data={d.verifications.byBucket} total={d.verifications.total} color="#10B981" />
-          <BucketTable data={d.verifications.byBucket} label="Verified" />
-        </div>
-
-        {/* Stock Outs */}
-        <div style={S.card}>
-          <div style={S.cHead}>📦 Stock Outs</div>
-          <div style={{ fontSize: 28, fontWeight: 900, color: "#3B82F6" }}>{d.stockOuts.total.toLocaleString()}</div>
-          <BucketBar data={d.stockOuts.byBucket} total={d.stockOuts.total} color="#3B82F6" />
-          <BucketTable data={d.stockOuts.byBucket} label="SOs" />
-        </div>
-
-        {/* Re-Cancellations */}
-        <div style={S.card}>
-          <div style={S.cHead}>🔄 Re-Cancellations</div>
-          <div style={{ fontSize: 28, fontWeight: 900, color: "#EF4444" }}>{d.reCancellations.total.toLocaleString()}</div>
-          <BucketBar data={d.reCancellations.byBucket} total={d.reCancellations.total} color="#EF4444" />
-          <BucketTable data={d.reCancellations.byBucket} label="Re-Cancel" />
-        </div>
-      </div>
-
-      {/* ── SBND (by bucket + by ageing) ────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
-        <div style={S.card}>
-          <div style={S.cHead}>🚛 SBND by SI Bucket ({d.sbnd.total})</div>
-          <BucketBar data={d.sbnd.byBucket} total={d.sbnd.total} color="#F59E0B" />
-          <BucketTable data={d.sbnd.byBucket} label="SBND" />
-        </div>
-        <div style={S.card}>
-          <div style={S.cHead}>🚛 SBND by Ageing ({d.sbnd.total})</div>
-          <BucketBar data={d.sbnd.byAgeing.map((r) => ({ b: r.a, v: r.v }))} total={d.sbnd.total} color="#8B5CF6" />
-          <BucketTable data={d.sbnd.byAgeing.map((r) => ({ b: r.a, v: r.v }))} label="Cars" />
-        </div>
-      </div>
-
-      {/* ── GFD ──────────────────────────────────────────────────── */}
-      <div style={{ ...S.card, marginBottom: 20 }}>
-        <div style={S.cHead}>🎁 GFD (Gate Fee Done) — {d.gfd.total}</div>
-        <BucketBar data={d.gfd.byBucket} total={d.gfd.total} color="#06B6D4" />
-        <BucketTable data={d.gfd.byBucket} label="GFD" />
-      </div>
-
-      {/* ── Dealer Activity ──────────────────────────────────────── */}
-      <div style={{ ...S.card, marginBottom: 20 }}>
-        <div style={S.cHead}>🏪 Dealer Activity on Inventory Cars</div>
-        <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
-          {[{ id: "dayAuction", label: "Day Auctions" }, { id: "ocb", label: "OCB" }, { id: "touchBuy", label: "Touch & Buy" }].map((f) => (
-            <button key={f.id} onClick={() => setActivityFilter(f.id)} style={{
-              padding: "8px 16px", borderRadius: 8, border: activityFilter === f.id ? "2px solid #3B82F6" : "1px solid #E2E8F0",
-              background: activityFilter === f.id ? "#EFF6FF" : "#FFF", color: activityFilter === f.id ? "#1D4ED8" : "#64748B",
-              fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit",
-            }}>{f.label}</button>
-          ))}
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-          <div style={{ ...S.card, padding: "14px", background: "#F8FAFC" }}>
-            <div style={{ fontSize: 10, color: "#64748B", textTransform: "uppercase", fontWeight: 700 }}>Auctioned Cars</div>
-            <div style={{ fontSize: 22, fontWeight: 900, color: "#0F172A", marginTop: 4 }}>{act.auctionedCars.toLocaleString()}</div>
-          </div>
-          <div style={{ ...S.card, padding: "14px", background: "#F8FAFC" }}>
-            <div style={{ fontSize: 10, color: "#64748B", textTransform: "uppercase", fontWeight: 700 }}>Total Auctions</div>
-            <div style={{ fontSize: 22, fontWeight: 900, color: "#3B82F6", marginTop: 4 }}>{act.totalAuctions.toLocaleString()}</div>
-            <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>Auctions/Car: <b>{act.auctionPerCar}</b></div>
-          </div>
-          <div style={{ ...S.card, padding: "14px", background: "#F8FAFC" }}>
-            <div style={{ fontSize: 10, color: "#64748B", textTransform: "uppercase", fontWeight: 700 }}>Impressions / Views / Bids</div>
-            <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
-              <div><div style={{ fontSize: 18, fontWeight: 900, color: "#8B5CF6" }}>{(act.impressions / 1000).toFixed(1)}K</div><div style={{ fontSize: 9, color: "#94A3B8" }}>Impressions</div></div>
-              <div><div style={{ fontSize: 18, fontWeight: 900, color: "#F59E0B" }}>{(act.views / 1000).toFixed(1)}K</div><div style={{ fontSize: 9, color: "#94A3B8" }}>Views</div></div>
-              <div><div style={{ fontSize: 18, fontWeight: 900, color: "#10B981" }}>{(act.bids / 1000).toFixed(1)}K</div><div style={{ fontSize: 9, color: "#94A3B8" }}>Bids</div></div>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12, marginBottom:16 }}>
+          <div style={{ ...S.card, padding:14, background:"#F8FAFC" }}><div style={{ fontSize:10, color:"#64748B", textTransform:"uppercase", fontWeight:700 }}>Auctioned Cars</div><div style={{ fontSize:22, fontWeight:900, color:"#0F172A", marginTop:4 }}>{act.cars.toLocaleString()}</div></div>
+          <div style={{ ...S.card, padding:14, background:"#F8FAFC" }}><div style={{ fontSize:10, color:"#64748B", textTransform:"uppercase", fontWeight:700 }}>Total Auctions</div><div style={{ fontSize:22, fontWeight:900, color:"#3B82F6", marginTop:4 }}>{act.auctions.toLocaleString()}</div><div style={{ fontSize:11, color:"#64748B", marginTop:2 }}>Auctions/Car: <b>{act.aucPerCar}</b></div></div>
+          <div style={{ ...S.card, padding:14, background:"#F8FAFC" }}>
+            <div style={{ fontSize:10, color:"#64748B", textTransform:"uppercase", fontWeight:700 }}>Total Impressions / Views / Bids</div>
+            <div style={{ display:"flex", gap:10, marginTop:6 }}>
+              <div><div style={{ fontSize:18, fontWeight:900, color:"#8B5CF6" }}>{(act.impressions/1000).toFixed(1)}K</div><div style={{ fontSize:9, color:"#94A3B8" }}>Impressions</div></div>
+              <div><div style={{ fontSize:18, fontWeight:900, color:"#F59E0B" }}>{(act.views/1000).toFixed(1)}K</div><div style={{ fontSize:9, color:"#94A3B8" }}>Views</div></div>
+              <div><div style={{ fontSize:18, fontWeight:900, color:"#10B981" }}>{(act.bids/1000).toFixed(1)}K</div><div style={{ fontSize:9, color:"#94A3B8" }}>Bids</div></div>
             </div>
           </div>
-          <div style={{ ...S.card, padding: "14px", background: "#F8FAFC" }}>
-            <div style={{ fontSize: 10, color: "#64748B", textTransform: "uppercase", fontWeight: 700 }}>Impressions / Auction</div>
-            <div style={{ fontSize: 22, fontWeight: 900, color: "#EC4899", marginTop: 4 }}>{act.liveImprAuc}</div>
+          <div style={{ ...S.card, padding:14, background:"#F8FAFC" }}>
+            <div style={{ fontSize:10, color:"#64748B", textTransform:"uppercase", fontWeight:700 }}>Avg per Auction</div>
+            <div style={{ display:"flex", gap:10, marginTop:6 }}>
+              <div><div style={{ fontSize:16, fontWeight:900, color:"#8B5CF6" }}>{act.avgImpr}</div><div style={{ fontSize:9, color:"#94A3B8" }}>Avg Impr</div></div>
+              <div><div style={{ fontSize:16, fontWeight:900, color:"#F59E0B" }}>{act.avgViews}</div><div style={{ fontSize:9, color:"#94A3B8" }}>Avg Views</div></div>
+              <div><div style={{ fontSize:16, fontWeight:900, color:"#10B981" }}>{act.avgBids}</div><div style={{ fontSize:9, color:"#94A3B8" }}>Avg Bids</div></div>
+            </div>
+          </div>
+        </div>
+        {/* Conversion funnel */}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:12 }}>
+          <div style={{ ...S.card, padding:14, textAlign:"center", borderTop:"3px solid #8B5CF6" }}>
+            <div style={{ fontSize:10, color:"#64748B", textTransform:"uppercase", fontWeight:700 }}>I2V (Impression → View)</div>
+            <div style={{ fontSize:26, fontWeight:900, color:"#8B5CF6", marginTop:4 }}>{act.i2v}%</div>
+          </div>
+          <div style={{ ...S.card, padding:14, textAlign:"center", borderTop:"3px solid #F59E0B" }}>
+            <div style={{ fontSize:10, color:"#64748B", textTransform:"uppercase", fontWeight:700 }}>V2B (View → Bid)</div>
+            <div style={{ fontSize:26, fontWeight:900, color:"#F59E0B", marginTop:4 }}>{act.v2b}%</div>
+          </div>
+          <div style={{ ...S.card, padding:14, textAlign:"center", borderTop:"3px solid #10B981" }}>
+            <div style={{ fontSize:10, color:"#64748B", textTransform:"uppercase", fontWeight:700 }}>I2B (Impression → Bid)</div>
+            <div style={{ fontSize:26, fontWeight:900, color:"#10B981", marginTop:4 }}>{act.i2b}%</div>
           </div>
         </div>
       </div>
 
-      {/* ── Lead Fees ────────────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
-        <MetricCard label="Lead Fee Earned" value={d.leadFeeEarned} fmt="inr" prev={other.leadFeeEarned} color="#10B981" />
-        <MetricCard label="Lead Fee Refunds" value={d.leadFeeRefunds} fmt="inr" prev={other.leadFeeRefunds} color="#EF4444" />
-        <MetricCard label="Net Lead Fee" value={d.leadFeeEarned - d.leadFeeRefunds} fmt="inr" prev={other.leadFeeEarned - other.leadFeeRefunds} color="#3B82F6" />
+      {/* Lead Fees */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginBottom:20 }}>
+        <div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:16 }}>
+            <div style={{ ...S.card, padding:16 }}><div style={{ fontSize:10, color:"#64748B", textTransform:"uppercase", fontWeight:700 }}>Lead Fee Earned</div><div style={{ fontSize:22, fontWeight:900, color:"#10B981", marginTop:6 }}>{INR(d.leadFeeEarned)}</div></div>
+            <div style={{ ...S.card, padding:16 }}><div style={{ fontSize:10, color:"#64748B", textTransform:"uppercase", fontWeight:700 }}>Lead Fee Refunds</div><div style={{ fontSize:22, fontWeight:900, color:"#EF4444", marginTop:6 }}>{INR(d.leadFeeRefunds)}</div></div>
+            <div style={{ ...S.card, padding:16 }}><div style={{ fontSize:10, color:"#64748B", textTransform:"uppercase", fontWeight:700 }}>Net Lead Fee</div><div style={{ fontSize:22, fontWeight:900, color:"#3B82F6", marginTop:6 }}>{INR(d.leadFeeEarned-d.leadFeeRefunds)}</div></div>
+          </div>
+        </div>
+        <div style={S.card}>
+          <div style={S.cHead}>💰 Lead Fee — Car Details</div>
+          <div style={{ maxHeight:250, overflowY:"auto" }}>
+            <table style={{ ...S.table, fontSize:12 }}>
+              <thead><tr>{["App ID","Bucket","Buying Price","Lead Fee","Fee %"].map(h=><th key={h} style={S.th}>{h}</th>)}</tr></thead>
+              <tbody>
+                {(d.leadFeeDetail||[]).map(r=>(
+                  <tr key={r.appId} className="tr">
+                    <td style={{ ...S.td, color:"#3B82F6", fontWeight:700 }}>{r.appId}</td>
+                    <td style={S.td}><span style={S.bucketChip}>{r.bucket}</span></td>
+                    <td style={{ ...S.td, fontVariantNumeric:"tabular-nums" }}>{INR(r.bp)}</td>
+                    <td style={{ ...S.td, fontWeight:700, color:"#10B981" }}>{INR(r.leadFee)}</td>
+                    <td style={S.td}>{r.bp?((r.leadFee/r.bp)*100).toFixed(1):0}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
-
 
 // ═════════════════════════════════════════════════════════════════════
 //  TAB 8 — QUICK INVENTORY SNAPSHOT
